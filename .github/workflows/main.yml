@@ -1,0 +1,51 @@
+name: "build"
+
+on:
+  pull_request:
+    paths-ignore:
+      - ".docs/**"
+  push:
+    branches:
+      - "*"
+  schedule:
+    - cron: "0 8 * * 1" # At 08:00 on Monday
+
+jobs:
+  qa:
+    name: "Quality assurance"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.0
+          coverage: none
+
+      - run: composer install --no-progress --prefer-dist
+      - run: composer phpcs
+
+  phpstan:
+    name: PHPStan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.0
+          coverage: none
+
+      - run: composer install --no-progress --prefer-dist
+      - run: composer phpstan -- --no-progress
+
+  psalm:
+    name: Psalm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.0
+          coverage: none
+
+      - run: composer install --no-progress --prefer-dist
+      - run: composer psalm -- --no-progress
