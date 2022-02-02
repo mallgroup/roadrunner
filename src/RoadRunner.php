@@ -52,7 +52,7 @@ class RoadRunner
 	private function getApplication(): PsrApplication
 	{
 		if (null === $this->application) {
-			/** @var PsrApplication application */
+			/** @psalm-var PsrApplication @phpstan-ignore-next-line */
 			$this->application = $this->container->getByType(PsrApplication::class);
 		}
 		return $this->application;

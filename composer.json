@@ -45,7 +45,7 @@
 	"minimum-stability": "stable",
 	"support": {
 		"email": "radovan.kepak@mallgroup.com",
-		"issues": "https://github.com/mallgroup/nette-on-roadrunner/issues"
+		"issues": "https://github.com/mallgroup/roadrunner/issues"
 	},
 	"autoload": {
 		"psr-4": {
