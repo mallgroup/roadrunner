@@ -1,0 +1,9 @@
+extensions:
+	roadrunner: Mallgroup\RoadRunner\DI\Extension
+
+roadrunner:
+	showExceptions: true
+
+di:
+	parentClass: Mallgroup\RoadRunner\DI\Container
+

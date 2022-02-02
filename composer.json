@@ -1,0 +1,46 @@
+{
+	"name": "mallgroup/roadrunner",
+	"type": "library",
+	"description": "Integration of Nette Framework into RoadRunner",
+	"keywords": ["nette", "roadrunner"],
+	"license": ["BSD-3-Clause"],
+	"authors": [
+		{
+			"name": "Mall Group",
+			"email": "radovan.kepak@mallgroup.com",
+			"homepage": "https://mallgroup.com"
+		}
+	],
+	"require": {
+		"php": ">=8 <8.2",
+		"nette/di": "^3.0.7",
+		"nette/utils": "^3.0",
+		"nette/application": "^3.0.7",
+		"nette/http": "^3.0",
+		"nette/schema": "^1.2",
+		"spiral/roadrunner-http": "^2.0",
+		"nyholm/psr7": "^1.4"
+	},
+	"require-dev": {
+		"nette/bootstrap": "^3.0",
+		"phpstan/phpstan-nette": "^0.12.15",
+		"tracy/tracy": "2.9"
+	},
+	"suggest": {
+		"tracy/tracy": "To set tracyHook and get Tracy blueScreen on exceptions"
+	},
+	"minimum-stability": "stable",
+	"support": {
+		"email": "radovan.kepak@mallgroup.com",
+		"issues": "https://github.com/mallgroup/nette-on-roadrunner/issues"
+	},
+	"autoload": {
+		"psr-4": {
+			"Mallgroup\\RoadRunner\\": "src/"
+		}
+	},
+	"scripts": {
+		"phpstan": "phpstan analyse",
+		"tester": "tester tests -s"
+	}
+}
