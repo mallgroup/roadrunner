@@ -18,7 +18,11 @@ use Mallgroup\RoadRunner\RoadRunner;
 use Spiral\RoadRunner\Http\PSR7Worker;
 use Spiral\RoadRunner\WorkerInterface;
 
-class Extension extends Nette\DI\CompilerExtension {
+/**
+ * @property-read \stdClass $config
+ */
+class Extension extends Nette\DI\CompilerExtension
+{
 	public function getConfigSchema(): Schema
 	{
 		return Expect::structure([
@@ -31,7 +35,7 @@ class Extension extends Nette\DI\CompilerExtension {
 	public function loadConfiguration()
 	{
 		$builder = $this->getContainerBuilder();
-		$config = $this->getConfig();
+		$config = $this->config;
 
 		$builder->removeDefinition('http.requestFactory');
 		$builder->addDefinition($this->prefix('requestFactory'))->setFactory(RequestFactory::class);
@@ -64,11 +68,13 @@ class Extension extends Nette\DI\CompilerExtension {
 
 		# Add PSRApplication
 		$builder->addDefinition($this->prefix('application'))
-		        ->setFactory(PsrApplication::class)
-		        ->addSetup('$catchExceptions', [$config->catchExceptions])
-		        ->addSetup('$errorPresenter', [$config->errorPresenter]);
+				->setFactory(PsrApplication::class)
+				->addSetup('$catchExceptions', [$config->catchExceptions])
+				->addSetup('$errorPresenter', [$config->errorPresenter]);
 
 		# Setup container
-		$builder->getDefinition('container')->setType(Container::class);
+		/** @var Nette\DI\Definitions\ServiceDefinition $definition */
+		$definition = $builder->getDefinition('container');
+		$definition->setType(Container::class);
 	}
 }

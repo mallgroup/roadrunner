@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Mallgroup\RoadRunner\Http;
 
 use Nette;
+use Nette\Http\Helpers;
 use Nette\Utils\DateTime;
 
 class Response implements IResponse
 {
-	/** @var array<string, string> */
+	/** @var array<string, array<string|null>> */
 	private array $headers = [];
 	private int $code = self::S200_OK;
 	private ?string $reason = null;
@@ -90,7 +91,7 @@ class Response implements IResponse
 		}
 
 		$time = DateTime::from($expire);
-		$this->setHeader('Cache-Control', 'max-age=' . ($time->format('U') - time()));
+		$this->setHeader('Cache-Control', 'max-age=' . ((int) $time->format('U') - time()));
 		$this->setHeader('Expires', Helpers::formatDate($time));
 		return $this;
 	}
@@ -105,11 +106,15 @@ class Response implements IResponse
 		return $this->headers[$header][0] ?? null;
 	}
 
+	/** @return array<string, array<string|null>> */
 	public function getHeaders(): array
 	{
 		return $this->headers;
 	}
 
+	/**
+	 * @throws \Exception
+	 */
 	public function setCookie(
 		string $name,
 		string $value,
@@ -117,7 +122,8 @@ class Response implements IResponse
 		string $path = null,
 		string $domain = null,
 		bool $secure = null,
-		bool $httpOnly = null
+		bool $httpOnly = null,
+		string $sameSite = null,
 	): static {
 		$headerValue = sprintf(
 			'%s=%s; expires=%s; path=%s; domain=%s; samesite=%s',
@@ -141,6 +147,9 @@ class Response implements IResponse
 		return $this;
 	}
 
+	/**
+	 * @throws \Exception
+	 */
 	public function deleteCookie(string $name, string $path = null, string $domain = null, bool $secure = null): static
 	{
 		$this->setCookie($name, '', 0, $path, $domain, $secure);

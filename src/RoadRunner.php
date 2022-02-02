@@ -16,7 +16,7 @@ use Tracy\BlueScreen;
 
 class RoadRunner
 {
-	private PsrApplication $application;
+	private ?PsrApplication $application = null;
 
 	public function __construct(
 		private PSR7WorkerInterface $worker,
@@ -25,7 +25,7 @@ class RoadRunner
 	) {
 	}
 
-	public function run()
+	public function run(): void
 	{
 		while (true) {
 			try {
@@ -51,7 +51,8 @@ class RoadRunner
 
 	private function getApplication(): PsrApplication
 	{
-		if (!isset($this->application)) {
+		if (null === $this->application) {
+			/** @var PsrApplication application */
 			$this->application = $this->container->getByType(PsrApplication::class);
 		}
 		return $this->application;
@@ -93,6 +94,6 @@ class RoadRunner
 			]);
 		}
 
-		return new Response(IResponse::S500_INTERNAL_SERVER_ERROR, $headers, $content);
+		return new Response(IResponse::S500_INTERNAL_SERVER_ERROR, $headers, $content ?: null);
 	}
 }

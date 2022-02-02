@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Mallgroup\RoadRunner\Http;
 
@@ -19,19 +19,24 @@ class RequestFactory
 	private array $proxies = [];
 	private static ServerRequestInterface $request;
 
-	public function setProxy(array $proxies): void {
+	/** @param string[] $proxies */
+	public function setProxy(array $proxies): void
+	{
 		$this->proxies = $proxies;
 	}
 
-	public static function setRequest(ServerRequestInterface $request): void {
+	public static function setRequest(ServerRequestInterface $request): void
+	{
 		self::$request = $request;
 	}
 
-	public static function fromGlobals(): Request {
+	public static function fromGlobals(): Request
+	{
 		return (new RequestFactory())->fromPsr(self::$request);
 	}
 
-	public static function fromRequest(ServerRequestInterface $request): Request {
+	public static function fromRequest(ServerRequestInterface $request): Request
+	{
 		return (new RequestFactory())->fromPsr($request);
 	}
 
@@ -45,14 +50,14 @@ class RequestFactory
 
 		return new Request(
 			new UrlScript($url, $this->getScriptPath($url)),
-			(array) $request->getParsedBody(),
+			(array)$request->getParsedBody(),
 			$request->getUploadedFiles(),
 			$request->getCookieParams(),
 			$this->mapHeaders($request->getHeaders()),
 			$request->getMethod(),
 			$remoteAddr,
 			$remoteHost,
-			fn (): string => (string) $request->getBody()
+			fn(): string => (string)$request->getBody()
 		);
 	}
 
@@ -71,6 +76,7 @@ class RequestFactory
 		return $path;
 	}
 
+	/** @return string[] */
 	private function getClient(Url $url): array
 	{
 		$remoteAddr = !empty($_SERVER['REMOTE_ADDR'])
@@ -83,7 +89,7 @@ class RequestFactory
 		// use real client address and host if trusted proxy is used
 		$usingTrustedProxy = $remoteAddr && array_filter($this->proxies, function (string $proxy) use ($remoteAddr): bool {
 				return Helpers::ipMatch($remoteAddr, $proxy);
-			});
+		});
 		if ($usingTrustedProxy) {
 			empty($_SERVER['HTTP_FORWARDED'])
 				? $this->useNonstandardProxy($url, $remoteAddr, $remoteHost)
@@ -93,8 +99,9 @@ class RequestFactory
 		return [$remoteAddr, $remoteHost];
 	}
 
-	private function useForwardedProxy(Url $url, &$remoteAddr, &$remoteHost): void
+	private function useForwardedProxy(Url $url, ?string &$remoteAddr, ?string &$remoteHost): void
 	{
+		/** @var array<int, string> $forwardParams */
 		$forwardParams = preg_split('/[,;]/', $_SERVER['HTTP_FORWARDED']);
 		foreach ($forwardParams as $forwardParam) {
 			[$key, $value] = explode('=', $forwardParam, 2) + [1 => ''];
@@ -115,17 +122,14 @@ class RequestFactory
 				$remoteHostArr = explode(':', $host);
 				$remoteHost = $remoteHostArr[0];
 				$url->setHost($remoteHost);
-				if (isset($remoteHostArr[1])) {
-					$url->setPort((int)$remoteHostArr[1]);
-				}
 			} else { //IPv6
-				$endingDelimiterPosition = strpos($host, ']');
+				$endingDelimiterPosition = (int) strpos($host, ']');
 				$remoteHost = substr($host, strpos($host, '[') + 1, $endingDelimiterPosition - 1);
 				$url->setHost($remoteHost);
 				$remoteHostArr = explode(':', substr($host, $endingDelimiterPosition));
-				if (isset($remoteHostArr[1])) {
-					$url->setPort((int)$remoteHostArr[1]);
-				}
+			}
+			if (isset($remoteHostArr[1])) {
+				$url->setPort((int)$remoteHostArr[1]);
 			}
 		}
 
@@ -135,7 +139,7 @@ class RequestFactory
 		$url->setScheme(strcasecmp($scheme, 'https') === 0 ? 'https' : 'http');
 	}
 
-	private function useNonstandardProxy(Url $url, &$remoteAddr, &$remoteHost): void
+	private function useNonstandardProxy(Url $url, ?string &$remoteAddr, ?string &$remoteHost): void
 	{
 		if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
 			$url->setScheme(strcasecmp($_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') === 0 ? 'https' : 'http');
@@ -189,7 +193,12 @@ class RequestFactory
 		return $url;
 	}
 
-	private function mapHeaders(array $headers): array {
+	/**
+	 * @param array<string, string[]> $headers
+	 * @return array<string, string>
+	 */
+	private function mapHeaders(array $headers): array
+	{
 		return array_map(static fn(array $header) => implode("\n", $header), $headers);
 	}
 }

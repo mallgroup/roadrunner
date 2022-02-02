@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mallgroup\RoadRunner;
 
 use Nette;
+use Nette\Application\AbortException;
 use Nette\Application\ApplicationException;
 use Nette\Application\BadRequestException;
 use Nette\Application\InvalidPresenterException;
@@ -58,7 +59,6 @@ class PsrApplication
 		private Router $router,
 		private IRequest $httpRequest,
 		private IResponse $httpResponse,
-		private Container $container,
 	) {
 	}
 
@@ -126,8 +126,7 @@ class PsrApplication
 		$this->requests[] = $request;
 		Arrays::invoke($this->onRequest, $this, $request);
 
-		if (
-			!$request->isMethod($request::FORWARD)
+		if (!$request->isMethod($request::FORWARD)
 			&& !strcasecmp($request->getPresenterName(), (string)$this->errorPresenter)
 		) {
 			throw new BadRequestException('Invalid request. Presenter is not achievable.');
@@ -151,27 +150,23 @@ class PsrApplication
 		Arrays::invoke($this->onResponse, $this, $response);
 		ob_start();
 		$response->send($this->httpRequest, $this->httpResponse);
-		return ob_get_clean();
+		return (string) ob_get_clean();
 	}
 
 	public function processException(\Throwable $e): string
 	{
-		if (!$e instanceof BadRequestException && $this->httpResponse instanceof Nette\Http\Response) {
-			$this->httpResponse->warnOnBuffer = false;
-		}
-		if (!$this->httpResponse->isSent()) {
-			$this->httpResponse->setCode($e instanceof BadRequestException ? ($e->getHttpCode() ?: 404) : 500);
-		}
-
+		$this->httpResponse->setCode($e instanceof BadRequestException ? ($e->getHttpCode() ?: 404) : 500);
 		$args = ['exception' => $e, 'request' => Arrays::last($this->requests) ?: null];
+
 		if ($this->presenter instanceof UI\Presenter) {
 			try {
 				$this->presenter->forward(":$this->errorPresenter:", $args);
 			} catch (AbortException) {
+				/** @psalm-suppress InternalMethod */
 				return $this->processRequest($this->presenter->getLastCreatedRequest());
 			}
 		} else {
-			return $this->processRequest(new Request($this->errorPresenter, Request::FORWARD, $args));
+			return $this->processRequest(new Request((string) $this->errorPresenter, Request::FORWARD, $args));
 		}
 	}
 

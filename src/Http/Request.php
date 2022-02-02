@@ -13,8 +13,7 @@ class Request implements IRequest
 
 	public function __construct(
 		private RequestFactory $requestFactory
-	)
-	{
+	) {
 		$this->request = $this->requestFactory->fromGlobals();
 	}
 
@@ -38,11 +37,12 @@ class Request implements IRequest
 		return $this->request->getPost(...func_get_args());
 	}
 
-	public function getFile(string $key)
+	public function getFile(string $key): ?Http\FileUpload
 	{
 		return $this->request->getFile($key);
 	}
 
+	/** @return Http\FileUpload[] */
 	public function getFiles(): array
 	{
 		return $this->request->getFiles();
@@ -53,6 +53,7 @@ class Request implements IRequest
 		return $this->request->getCookie($key);
 	}
 
+	/** @return mixed[] */
 	public function getCookies(): array
 	{
 		return $this->request->getCookies();
@@ -73,6 +74,7 @@ class Request implements IRequest
 		return $this->request->getHeader($header);
 	}
 
+	/** @return array<string, string[]> */
 	public function getHeaders(): array
 	{
 		return $this->request->getHeaders();
@@ -103,7 +105,7 @@ class Request implements IRequest
 		return $this->request->getRawBody();
 	}
 
-	public function getReferer()
+	public function getReferer(): ?Http\UrlImmutable
 	{
 		return $this->request->getReferer();
 	}
