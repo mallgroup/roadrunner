@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Mallgroup\RoadRunner;
 
 use Nyholm\Psr7\Response;
-use Mallgroup\RoadRunner\DI\Container;
+use Nette\DI\Container;
 use Nette\Http\IResponse;
 use Mallgroup\RoadRunner\Http\IRequest;
 use Mallgroup\RoadRunner\Http\RequestFactory;

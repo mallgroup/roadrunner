@@ -3,7 +3,3 @@ extensions:
 
 roadrunner:
 	showExceptions: true
-
-di:
-	parentClass: Mallgroup\RoadRunner\DI\Container
-

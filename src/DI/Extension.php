@@ -50,8 +50,13 @@ class Extension extends Nette\DI\CompilerExtension
 		$builder->addDefinition($this->prefix('response'))->setFactory(Response::class)->setType(IResponse::class);
 
 		# Add roadrunner PSR requirements
-		$builder->addDefinition($this->prefix('worker'))->setFactory('Spiral\RoadRunner\Worker::create')->setType(WorkerInterface::class)->setAutowired(false);
-		$builder->addDefinition($this->prefix('psr17factory'))->setFactory(Psr17Factory::class)->setAutowired(false);
+		$builder->addDefinition($this->prefix('worker'))
+				->setFactory('Spiral\RoadRunner\Worker::create')
+				->setType(WorkerInterface::class)
+				->setAutowired(false);
+		$builder->addDefinition($this->prefix('psr17factory'))
+				->setFactory(Psr17Factory::class)
+				->setAutowired(false);
 		$builder->addDefinition($this->prefix('psrWorker'))->setFactory(PSR7Worker::class, [
 			'@' . $this->prefix('worker'),
 			'@' . $this->prefix('psr17factory'),
@@ -71,10 +76,5 @@ class Extension extends Nette\DI\CompilerExtension
 				->setFactory(PsrApplication::class)
 				->addSetup('$catchExceptions', [$config->catchExceptions])
 				->addSetup('$errorPresenter', [$config->errorPresenter]);
-
-		# Setup container
-		/** @var Nette\DI\Definitions\ServiceDefinition $definition */
-		$definition = $builder->getDefinition('container');
-		$definition->setType(Container::class);
 	}
 }
