@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Mallgroup\RoadRunner\Http;
 
+use Nette\Http\FileUpload;
 use Nette\Http\Helpers;
 use Nette\Http\Request;
 use Nette\Http\Url;
 use Nette\Http\UrlScript;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\UploadedFileInterface;
+use Psr\Http\Message\UriInterface;
 
 /**
  * TODO: Polish this a bit more, this is just ugly code to make this works
@@ -30,14 +33,9 @@ class RequestFactory
 		self::$request = $request;
 	}
 
-	public static function fromGlobals(): Request
+	public static function fromRequest(ServerRequestInterface $request = null): Request
 	{
-		return (new RequestFactory())->fromPsr(self::$request);
-	}
-
-	public static function fromRequest(ServerRequestInterface $request): Request
-	{
-		return (new RequestFactory())->fromPsr($request);
+		return (new RequestFactory())->fromPsr($request ?: self::$request);
 	}
 
 	public function fromPsr(ServerRequestInterface $request): Request
@@ -46,12 +44,14 @@ class RequestFactory
 		$url = $this->createUrlFromRequest($request);
 		$url->setQuery($uri->getQuery());
 
+		$this->setAuthorization($url, $uri);
+
 		[$remoteAddr, $remoteHost] = $this->getClient($url);
 
 		return new Request(
 			new UrlScript($url, $this->getScriptPath($url)),
 			(array)$request->getParsedBody(),
-			$request->getUploadedFiles(),
+			$this->mapUploadedFiles($request->getUploadedFiles()),
 			$request->getCookieParams(),
 			$this->mapHeaders($request->getHeaders()),
 			$request->getMethod(),
@@ -110,7 +110,7 @@ class RequestFactory
 
 		if (isset($proxyParams['for'])) {
 			$address = $proxyParams['for'][0];
-			$remoteAddr = strpos($address, '[') === false
+			$remoteAddr = !str_contains($address, '[')
 				? explode(':', $address)[0]  // IPv4
 				: substr($address, 1, strpos($address, ']') - 1); // IPv6
 		}
@@ -182,15 +182,20 @@ class RequestFactory
 		$url->setPath($uri->getPath());
 		$url->setQuery($uri->getQuery());
 
-		// Authorization
-		$params = $request->getServerParams();
-		if (isset($params['HTTP_AUTHORIZATION']) && preg_match('~^Basic\s(.*?)$~', $params['HTTP_AUTHORIZATION'], $matches)) {
-			[$user, $pass] = explode(':', base64_decode($matches[1]));
-			$url->setUser($user);
-			$url->setPassword($pass);
+		return $url;
+	}
+
+	private function setAuthorization(Url $url, UriInterface $uri): void
+	{
+		$user = $uri->getUserInfo();
+		$pass = '';
+
+		if (str_contains($user, ':')) {
+			[$user, $pass] = explode(':', $user, 2);
 		}
 
-		return $url;
+		$url->setUser($user);
+		$url->setPassword($pass);
 	}
 
 	/**
@@ -200,5 +205,19 @@ class RequestFactory
 	private function mapHeaders(array $headers): array
 	{
 		return array_map(static fn(array $header) => implode("\n", $header), $headers);
+	}
+
+	/**
+	 * @param UploadedFileInterface[] $uploadedFiles
+	 * @return FileUpload[]
+	 */
+	private function mapUploadedFiles(array $uploadedFiles): array
+	{
+		return array_map(static fn(UploadedFileInterface $file) => new FileUpload([
+			'name' => $file->getClientFilename(),
+			'size' => $file->getSize(),
+			'error' => $file->getError(),
+			'tmpName' => $file->getStream()->getMetadata('uri'),
+		]), $uploadedFiles);
 	}
 }

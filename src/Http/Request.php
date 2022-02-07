@@ -14,7 +14,7 @@ class Request implements IRequest
 	public function __construct(
 		private RequestFactory $requestFactory
 	) {
-		$this->request = $this->requestFactory->fromGlobals();
+		$this->request = $this->requestFactory->fromRequest();
 	}
 
 	public function updateFromPsr(ServerRequestInterface $request): void
