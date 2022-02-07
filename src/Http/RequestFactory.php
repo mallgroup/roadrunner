@@ -46,7 +46,7 @@ class RequestFactory
 
 		$this->setAuthorization($url, $uri);
 
-		[$remoteAddr, $remoteHost] = $this->getClient($request, $url);
+		[$remoteAddr, $remoteHost, $url] = $this->getClient($request, $url);
 
 		return new Request(
 			new UrlScript($url, $this->getScriptPath($url)),
@@ -76,35 +76,41 @@ class RequestFactory
 		return $path;
 	}
 
-	/** @return string[] */
+	/**
+	 * @return array{string, string, Url}
+	 */
 	private function getClient(ServerRequestInterface $request, Url $url): array
 	{
 		$serverParams = $request->getServerParams();
 		$remoteAddr = $serverParams['REMOTE_ADDR'] ?? ($request->getHeader('REMOTE_ADDR')[0] ?? null);
 		$remoteHost = $serverParams['REMOTE_HOST'] ?? ($request->getHeader('REMOTE_HOST')[0] ?? null);
 
-		// use real client address and host if trusted proxy is used
-		$usingTrustedProxy = $remoteAddr && array_filter($this->proxies, function (string $proxy) use ($remoteAddr): bool {
-				return Helpers::ipMatch($remoteAddr, $proxy);
-		});
+		$usingTrustedProxy = $remoteAddr && !empty(array_filter($this->proxies, function (string $proxy) use ($remoteAddr): bool {
+			return Helpers::ipMatch($remoteAddr, $proxy);
+		}));
 
 		if ($usingTrustedProxy) {
 			if (empty($request->getHeader('HTTP_FORWARDED'))) {
-				$this->useNonstandardProxy($url, $request, $remoteAddr, $remoteHost);
+				[$remoteAddr, $remoteHost, $url] = $this->useNonstandardProxy($url, $request, $remoteAddr, $remoteHost);
 			} else {
-				$this->useForwardedProxy($url, $request->getHeader('HTTP_FORWARDED'), $remoteAddr, $remoteHost);
+				[$remoteAddr, $remoteHost, $url] = $this->useForwardedProxy($url, $request, $remoteAddr, $remoteHost);
 			}
 		}
 
-		return [$remoteAddr, $remoteHost];
+		return [$remoteAddr, $remoteHost, $url];
 	}
 
+	/**
+	 * @return array{string, string, Url}
+	 */
 	private function useForwardedProxy(
 		Url $url,
-		array $forwardParams,
-		?string &$remoteAddr,
-		?string &$remoteHost
-	): void {
+		ServerRequestInterface $request,
+		?string $remoteAddr,
+		?string $remoteHost
+	): array {
+		$forwardParams = $request->getHeader('HTTP_FORWARDED');
+		$proxyParams = [];
 		/** @var array<int, string> $forwardParams */
 		foreach ($forwardParams as $forwardParam) {
 			[$key, $value] = explode('=', $forwardParam, 2) + [1 => ''];
@@ -140,14 +146,16 @@ class RequestFactory
 			? $proxyParams['proto'][0]
 			: 'http';
 		$url->setScheme(strcasecmp($scheme, 'https') === 0 ? 'https' : 'http');
+
+		return [$remoteAddr, $remoteHost, $url];
 	}
 
 	private function useNonstandardProxy(
 		Url $url,
 		ServerRequestInterface $request,
-		?string &$remoteAddr,
-		?string &$remoteHost
-	): void {
+		?string $remoteAddr,
+		?string $remoteHost
+	): array {
 
 		if (isset($request->getHeader('HTTP_X_FORWARDED_PROTO')[0])) {
 			$url->setScheme(strcasecmp($request->getHeader('HTTP_X_FORWARDED_PROTO')[0], 'https') === 0 ? 'https' : 'http');
@@ -180,6 +188,8 @@ class RequestFactory
 				$url->setHost($remoteHost);
 			}
 		}
+
+		return [$remoteAddr, $remoteHost, $url];
 	}
 
 	private function createUrlFromRequest(ServerRequestInterface $request): Url
