@@ -46,7 +46,7 @@ class RequestFactory
 
 		$this->setAuthorization($url, $uri);
 
-		[$remoteAddr, $remoteHost, $url] = $this->getClient($request, $url);
+		[$remoteAddr, $remoteHost] = $this->resolveClientAttributes($request, $url);
 
 		return new Request(
 			new UrlScript($url, $this->getScriptPath($url)),
@@ -77,9 +77,9 @@ class RequestFactory
 	}
 
 	/**
-	 * @return array{string, string, Url}
+	 * @return string[]
 	 */
-	private function getClient(ServerRequestInterface $request, Url $url): array
+	private function resolveClientAttributes(ServerRequestInterface $request, Url $url): array
 	{
 		$serverParams = $request->getServerParams();
 		$remoteAddr = $serverParams['REMOTE_ADDR'] ?? ($request->getHeader('REMOTE_ADDR')[0] ?? null);
@@ -90,16 +90,16 @@ class RequestFactory
 		}));
 
 		if ($usingTrustedProxy) {
-			[$remoteAddr, $remoteHost, $url] = empty($request->getHeader('HTTP_FORWARDED')) 
-			? $this->useNonstandardProxy($url, $request, $remoteAddr, $remoteHost) 
+			[$remoteAddr, $remoteHost] = empty($request->getHeader('HTTP_FORWARDED'))
+			? $this->useNonstandardProxy($url, $request, $remoteAddr, $remoteHost)
 			: $this->useForwardedProxy($url, $request, $remoteAddr, $remoteHost);
 		}
 
-		return [$remoteAddr, $remoteHost, $url];
+		return [$remoteAddr, $remoteHost];
 	}
 
 	/**
-	 * @return array{string, string, Url}
+	 * @return string[]
 	 */
 	private function useForwardedProxy(
 		Url $url,
@@ -145,9 +145,12 @@ class RequestFactory
 			: 'http';
 		$url->setScheme(strcasecmp($scheme, 'https') === 0 ? 'https' : 'http');
 
-		return [$remoteAddr, $remoteHost, $url];
+		return [$remoteAddr, $remoteHost];
 	}
 
+	/**
+	 * @return string[]
+	 */
 	private function useNonstandardProxy(
 		Url $url,
 		ServerRequestInterface $request,
@@ -187,7 +190,7 @@ class RequestFactory
 			}
 		}
 
-		return [$remoteAddr, $remoteHost, $url];
+		return [$remoteAddr, $remoteHost];
 	}
 
 	private function createUrlFromRequest(ServerRequestInterface $request): Url
