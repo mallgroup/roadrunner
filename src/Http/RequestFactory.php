@@ -90,11 +90,9 @@ class RequestFactory
 		}));
 
 		if ($usingTrustedProxy) {
-			if (empty($request->getHeader('HTTP_FORWARDED'))) {
-				[$remoteAddr, $remoteHost, $url] = $this->useNonstandardProxy($url, $request, $remoteAddr, $remoteHost);
-			} else {
-				[$remoteAddr, $remoteHost, $url] = $this->useForwardedProxy($url, $request, $remoteAddr, $remoteHost);
-			}
+			[$remoteAddr, $remoteHost, $url] = empty($request->getHeader('HTTP_FORWARDED')) 
+			? $this->useNonstandardProxy($url, $request, $remoteAddr, $remoteHost) 
+			: $this->useForwardedProxy($url, $request, $remoteAddr, $remoteHost);
 		}
 
 		return [$remoteAddr, $remoteHost, $url];
