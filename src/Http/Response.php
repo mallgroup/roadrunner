@@ -30,6 +30,7 @@ class Response implements IResponse
 	{
 		$this->headers = [];
 		$this->code = self::S200_OK;
+		$this->reason = null;
 	}
 
 	public function setCode(int $code, string $reason = null): static
