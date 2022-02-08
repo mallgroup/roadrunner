@@ -2,6 +2,7 @@ MallGroup/Roadrunner
 ======
 
 [![build](https://github.com/mallgroup/roadrunner/actions/workflows/main.yml/badge.svg)](https://github.com/mallgroup/roadrunner/actions/workflows/main.yml)
+[![Coverage Status](https://coveralls.io/repos/github/mallgroup/roadrunner/badge.svg?branch=main)](https://coveralls.io/github/mallgroup/roadrunner?branch=main)
 [![Downloads this Month](https://img.shields.io/packagist/dm/mallgroup/roadrunner.svg)](https://packagist.org/packages/mallgroup/roadrunner)
 [![Latest stable](https://img.shields.io/packagist/v/mallgroup/roadrunner.svg)](https://packagist.org/packages/mallgroup/roadrunner)
 [![Coverage Status](https://coveralls.io/repos/github/mallgroup/roadrunner/badge.svg?branch=master)](https://coveralls.io/github/mallgroup/roadrunner?branch=master)
