@@ -99,7 +99,7 @@ class RequestFactory
 	}
 
 	/**
-	 * @return string[]
+	 * @return array<int, string|null>
 	 */
 	private function useForwardedProxy(
 		Url $url,
@@ -149,7 +149,7 @@ class RequestFactory
 	}
 
 	/**
-	 * @return string[]
+	 * @return array<int, string|null>
 	 */
 	private function useNonstandardProxy(
 		Url $url,
