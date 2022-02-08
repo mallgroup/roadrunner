@@ -31,7 +31,8 @@
 		"squizlabs/php_codesniffer": "^3.6",
 		"phpstan/phpstan-nette": "^1.0",
 		"vimeo/psalm": "^4.19",
-		"tracy/tracy": "^2.9"
+		"tracy/tracy": "^2.9",
+		"nette/tester": "^2.4"
 	},
 	"suggest": {
 		"tracy/tracy": "To set tracyHook and get Tracy blueScreen on exceptions"
@@ -40,7 +41,8 @@
 		"phpcs": "./vendor/bin/phpcs -p -n --standard=ruleset.xml",
 		"fix-style": "./vendor/bin/phpcbf -p -n --standard=ruleset.xml",
 		"phpstan": "phpstan analyse",
-		"psalm": "psalm"
+		"psalm": "psalm",
+		"unit-tests": "tester -o console ./tests/unit"
 	},
 	"minimum-stability": "stable",
 	"support": {
