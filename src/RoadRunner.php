@@ -45,6 +45,8 @@ class RoadRunner
 				);
 			} catch (Throwable $e) {
 				$this->worker->respond($this->processException($e));
+			} finally {
+				$this->getApplication()->afterResponse();
 			}
 		}
 	}
