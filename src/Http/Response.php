@@ -120,28 +120,37 @@ class Response implements IResponse
 		string $name,
 		string $value,
 		$expire,
-		string $path = null,
-		string $domain = null,
-		bool $secure = null,
-		bool $httpOnly = null,
-		string $sameSite = null,
+		?string $path = null,
+		?string $domain = null,
+		?bool $secure = null,
+		?bool $httpOnly = null,
+		?string $sameSite = null,
 	): static {
+		
 		$headerValue = sprintf(
-			'%s=%s; expires=%s; path=%s; domain=%s; samesite=%s',
+			'%s=%s; path=%s; SameSite=%s',
 			$name,
 			urlencode($value),
-			$expire ? DateTime::from($expire)->format('D, d M Y H:i:s T') : 0,
 			$path ?? ($domain ? '/' : $this->cookiePath),
-			$domain ?? ($path ? '' : $this->cookieDomain),
 			$sameSite ?? self::SAME_SITE_LAX,
 		);
+		
+		$cookieDomain = $domain ?? $this->cookieDomain;
+		if ($expire) {
+			$headerValue .= '; Expires='.(DateTime::from($expire)->format('D, d M Y H:i:s T'));
+		}
+
+		$cookieDomain = $domain ?? $this->cookieDomain;
+		if ($cookieDomain && !$path) {
+			$headerValue .= '; domain='.$cookieDomain;
+		}
 
 		if ($secure ?? $this->cookieSecure) {
 			$headerValue .= '; secure';
 		}
 
-		if ($httpOnly) {
-			$headerValue .= '; httpOnly';
+		if ($httpOnly || $httpOnly === null) {
+			$headerValue .= '; HttpOnly';
 		}
 
 		$this->addHeader('Set-Cookie', $headerValue);
