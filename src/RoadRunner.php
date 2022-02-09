@@ -8,7 +8,6 @@ use Nyholm\Psr7\Response;
 use Nette\DI\Container;
 use Nette\Http\IResponse;
 use Mallgroup\RoadRunner\Http\IRequest;
-use Mallgroup\RoadRunner\Http\RequestFactory;
 use Psr\Http\Message\ServerRequestInterface;
 use Spiral\RoadRunner\Http\PSR7WorkerInterface;
 use Throwable;
@@ -17,7 +16,6 @@ use Tracy\BlueScreen;
 class RoadRunner
 {
 	private ?PsrApplication $application = null;
-	private ?RequestFactory $requestFactory = null;
 
 	public function __construct(
 		private PSR7WorkerInterface $worker,
@@ -40,7 +38,6 @@ class RoadRunner
 			}
 
 			try {
-				$this->getRequestFactory()->setServerRequest($request);
 				$this->worker->respond(
 					$this->getApplication()->run($request)
 				);
@@ -59,15 +56,6 @@ class RoadRunner
 			$this->application = $this->container->getByType(PsrApplication::class);
 		}
 		return $this->application;
-	}
-
-	private function getRequestFactory(): RequestFactory
-	{
-		if (null === $this->requestFactory) {
-			/** @psalm-var RequestFactory @phpstan-ignore-next-line */
-			$this->requestFactory = $this->container->getByType(RequestFactory::class);
-		}
-		return $this->requestFactory;
 	}
 
 	private function processException(Throwable $e): Response

@@ -16,7 +16,6 @@ class RequestFactory
 {
 	/** @var string[] */
 	private array $proxies = [];
-	private ?ServerRequestInterface $serverRequest = null;
 
 	/** @param string[] $proxies */
 	public function setProxy(array $proxies): void
@@ -24,47 +23,30 @@ class RequestFactory
 		$this->proxies = $proxies;
 	}
 
-	public function setServerRequest(ServerRequestInterface $request): void
+	public function getRequest(ServerRequestInterface $request): Request
 	{
-		$this->serverRequest = $request;
-	}
+		$url = $this->createUrl($request);
 
-	public function getServerRequest(): ServerRequestInterface
-	{
-		if (!isset($this->serverRequest)) {
-			throw new \RuntimeException('ServerRequest not set.');
-		}
-		return $this->serverRequest;
-	}
-
-	public function getRequest(ServerRequestInterface $request = null): Request
-	{
-		if (null !== $request) {
-			$this->setServerRequest($request);
-		}
-
-		$url = $this->createUrl();
-
-		[$remoteAddr, $remoteHost] = $this->resolveClientAttributes($url);
+		[$remoteAddr, $remoteHost] = $this->resolveClientAttributes($url, $request);
 
 		return new Request(
-			new UrlScript($url, $this->getScriptPath($url)),
-			$this->getPost(),
-			$this->getUploadedFiles(),
-			$this->getCookies(),
-			$this->getHeaders(),
-			$this->getMethod(),
+			new UrlScript($url, $this->getScriptPath($url, $request)),
+			$this->getPost($request),
+			$this->getUploadedFiles($request),
+			$request->getCookieParams(),
+			$this->getHeaders($request),
+			$request->getMethod(),
 			$remoteAddr,
 			$remoteHost,
-			fn(): string => $this->getRequestBody()
+			fn(): string => (string) $request->getBody()
 		);
 	}
 
-	private function getScriptPath(Url $url): string
+	private function getScriptPath(Url $url, ServerRequestInterface $request): string
 	{
 		$path = $url->getPath();
 		$lpath = strtolower($path);
-		$script = strtolower($this->getServerRequest()->getServerParams()['SCRIPT_NAME'] ?? '');
+		$script = strtolower($request->getServerParams()['SCRIPT_NAME'] ?? '');
 		if ($lpath !== $script) {
 			$max = min(strlen($lpath), strlen($script));
 			for ($i = 0; $i < $max && $lpath[$i] === $script[$i]; $i++) ;
@@ -78,9 +60,8 @@ class RequestFactory
 	/**
 	 * @return string[]
 	 */
-	private function resolveClientAttributes(Url $url): array
+	private function resolveClientAttributes(Url $url, ServerRequestInterface $request): array
 	{
-		$request = $this->getServerRequest();
 		$serverParams = $request->getServerParams();
 
 		$remoteAddr = $serverParams['REMOTE_ADDR'] ?? ($request->getHeader('REMOTE_ADDR')[0] ?? null);
@@ -210,60 +191,42 @@ class RequestFactory
 		$url->setPassword($pass);
 	}
 
-	private function getMethod(): string
-	{
-		return $this->getServerRequest()->getMethod();
-	}
-
 	/**
 	 * @return array<string, string>
 	 */
-	private function getCookies(): array
-	{
-		return $this->getServerRequest()->getCookieParams();
-	}
-
-	/**
-	 * @return array<string, string>
-	 */
-	private function getHeaders(): array
+	private function getHeaders(ServerRequestInterface $request): array
 	{
 		return array_map(
 			static fn(array $header) => implode("\n", $header),
-			$this->getServerRequest()->getHeaders()
+			$request->getHeaders()
 		);
 	}
 
 	/**
 	 * @return FileUpload[]
 	 */
-	private function getUploadedFiles(): array
+	private function getUploadedFiles(ServerRequestInterface $request): array
 	{
 		return array_map(static fn(UploadedFileInterface $file) => new FileUpload([
 			'name' => $file->getClientFilename(),
 			'size' => $file->getSize(),
 			'error' => $file->getError(),
 			'tmpName' => $file->getStream()->getMetadata('uri'),
-		]), $this->getServerRequest()->getUploadedFiles());
+		]), $request->getUploadedFiles());
 	}
 
 	/**
 	 * @return array<string, mixed>
 	 */
-	private function getPost(): array
+	private function getPost(ServerRequestInterface $request): array
 	{
-		return (array) $this->getServerRequest()->getParsedBody();
+		return (array) $request->getParsedBody();
 	}
 
-	private function getRequestBody(): string
-	{
-		return (string) $this->getServerRequest()->getBody();
-	}
-
-	private function createUrl(): Url
+	private function createUrl(ServerRequestInterface $request): Url
 	{
 		$url = new Url;
-		$uri = $this->getServerRequest()->getUri();
+		$uri = $request->getUri();
 
 		$url->setScheme($uri->getScheme());
 		$url->setHost($uri->getHost());

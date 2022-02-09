@@ -118,6 +118,7 @@ class PsrApplication
 	{
 		$this->httpRequest->updateFromPsr($request);
 		$this->httpResponse->cleanup();
+
 		$this->requests = [];
 		$this->presenter = null;
 	}

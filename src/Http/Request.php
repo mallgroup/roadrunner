@@ -9,12 +9,11 @@ use Psr\Http\Message\ServerRequestInterface;
 
 class Request implements IRequest
 {
-	private Http\Request $request;
+	private ?Http\Request $request = null;
 
 	public function __construct(
 		private RequestFactory $requestFactory
 	) {
-		$this->request = $this->requestFactory->getRequest();
 	}
 
 	public function updateFromPsr(ServerRequestInterface $request): void
@@ -24,94 +23,102 @@ class Request implements IRequest
 
 	public function getUrl(): Http\UrlScript
 	{
-		return $this->request->getUrl();
+		return $this->getRequest()->getUrl();
 	}
 
 	public function getQuery(string $key = null)
 	{
-		return $this->request->getQuery(...func_get_args());
+		return $this->getRequest()->getQuery(...func_get_args());
 	}
 
 	public function getPost(string $key = null)
 	{
-		return $this->request->getPost(...func_get_args());
+		return $this->getRequest()->getPost(...func_get_args());
 	}
 
 	public function getFile(string $key): ?Http\FileUpload
 	{
-		return $this->request->getFile($key);
+		return $this->getRequest()->getFile($key);
 	}
 
 	/** @return Http\FileUpload[] */
 	public function getFiles(): array
 	{
-		return $this->request->getFiles();
+		return $this->getRequest()->getFiles();
 	}
 
 	public function getCookie(string $key)
 	{
-		return $this->request->getCookie($key);
+		return $this->getRequest()->getCookie($key);
 	}
 
 	/** @return mixed[] */
 	public function getCookies(): array
 	{
-		return $this->request->getCookies();
+		return $this->getRequest()->getCookies();
 	}
 
 	public function getMethod(): string
 	{
-		return $this->request->getMethod();
+		return $this->getRequest()->getMethod();
 	}
 
 	public function isMethod(string $method): bool
 	{
-		return $this->request->isMethod($method);
+		return $this->getRequest()->isMethod($method);
 	}
 
 	public function getHeader(string $header): ?string
 	{
-		return $this->request->getHeader($header);
+		return $this->getRequest()->getHeader($header);
 	}
 
 	/** @return array<string, string[]> */
 	public function getHeaders(): array
 	{
-		return $this->request->getHeaders();
+		return $this->getRequest()->getHeaders();
 	}
 
 	public function isSecured(): bool
 	{
-		return $this->request->isSecured();
+		return $this->getRequest()->isSecured();
 	}
 
 	public function isAjax(): bool
 	{
-		return $this->request->isAjax();
+		return $this->getRequest()->isAjax();
 	}
 
 	public function getRemoteAddress(): ?string
 	{
-		return $this->request->getRemoteAddress();
+		return $this->getRequest()->getRemoteAddress();
 	}
 
 	public function getRemoteHost(): ?string
 	{
-		return $this->request->getRemoteHost();
+		return $this->getRequest()->getRemoteHost();
 	}
 
 	public function getRawBody(): ?string
 	{
-		return $this->request->getRawBody();
+		return $this->getRequest()->getRawBody();
 	}
 
 	public function getReferer(): ?Http\UrlImmutable
 	{
-		return $this->request->getReferer();
+		return $this->getRequest()->getReferer();
 	}
 
 	public function isSameSite(): bool
 	{
-		return $this->request->isSameSite();
+		return $this->getRequest()->isSameSite();
+	}
+
+	private function getRequest(): Http\Request
+	{
+		if (null === $this->request) {
+			throw new \RuntimeException('Request is not set.');
+		}
+		return $this->request;
 	}
 }
