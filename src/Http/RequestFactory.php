@@ -11,16 +11,12 @@ use Nette\Http\Url;
 use Nette\Http\UrlScript;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UploadedFileInterface;
-use Psr\Http\Message\UriInterface;
 
-/**
- * TODO: Polish this a bit more, this is just ugly code to make this works
- */
 class RequestFactory
 {
 	/** @var string[] */
 	private array $proxies = [];
-	private static ServerRequestInterface $request;
+	private ?ServerRequestInterface $serverRequest = null;
 
 	/** @param string[] $proxies */
 	public function setProxy(array $proxies): void
@@ -28,36 +24,39 @@ class RequestFactory
 		$this->proxies = $proxies;
 	}
 
-	public static function setRequest(ServerRequestInterface $request): void
+	public function setServerRequest(ServerRequestInterface $request): void
 	{
-		self::$request = $request;
+		$this->serverRequest = $request;
 	}
 
-	public static function fromRequest(ServerRequestInterface $request = null): Request
+	public function getServerRequest(): ServerRequestInterface
 	{
-		return (new RequestFactory())->fromPsr($request ?: self::$request);
+		if (!isset($this->serverRequest)) {
+			throw new \RuntimeException('ServerRequest not set.');
+		}
+		return $this->serverRequest;
 	}
 
-	public function fromPsr(ServerRequestInterface $request): Request
+	public function getRequest(ServerRequestInterface $request = null): Request
 	{
-		$uri = $request->getUri();
-		$url = $this->createUrlFromRequest($request);
-		$url->setQuery($uri->getQuery());
+		if (null !== $request) {
+			$this->setServerRequest($request);
+		}
 
-		$this->setAuthorization($url, $uri);
+		$url = $this->createUrl();
 
-		[$remoteAddr, $remoteHost] = $this->resolveClientAttributes($request, $url);
+		[$remoteAddr, $remoteHost] = $this->resolveClientAttributes($url);
 
 		return new Request(
 			new UrlScript($url, $this->getScriptPath($url)),
-			(array)$request->getParsedBody(),
-			$this->mapUploadedFiles($request->getUploadedFiles()),
-			$request->getCookieParams(),
-			$this->mapHeaders($request->getHeaders()),
-			$request->getMethod(),
+			$this->getPost(),
+			$this->getUploadedFiles(),
+			$this->getCookies(),
+			$this->getHeaders(),
+			$this->getMethod(),
 			$remoteAddr,
 			$remoteHost,
-			fn(): string => (string)$request->getBody()
+			fn(): string => $this->getRequestBody()
 		);
 	}
 
@@ -65,7 +64,7 @@ class RequestFactory
 	{
 		$path = $url->getPath();
 		$lpath = strtolower($path);
-		$script = strtolower($_SERVER['SCRIPT_NAME'] ?? '');
+		$script = strtolower($this->getServerRequest()->getServerParams()['SCRIPT_NAME'] ?? '');
 		if ($lpath !== $script) {
 			$max = min(strlen($lpath), strlen($script));
 			for ($i = 0; $i < $max && $lpath[$i] === $script[$i]; $i++) ;
@@ -79,15 +78,19 @@ class RequestFactory
 	/**
 	 * @return string[]
 	 */
-	private function resolveClientAttributes(ServerRequestInterface $request, Url $url): array
+	private function resolveClientAttributes(Url $url): array
 	{
+		$request = $this->getServerRequest();
 		$serverParams = $request->getServerParams();
+
 		$remoteAddr = $serverParams['REMOTE_ADDR'] ?? ($request->getHeader('REMOTE_ADDR')[0] ?? null);
 		$remoteHost = $serverParams['REMOTE_HOST'] ?? ($request->getHeader('REMOTE_HOST')[0] ?? null);
 
-		$usingTrustedProxy = $remoteAddr && !empty(array_filter($this->proxies, function (string $proxy) use ($remoteAddr): bool {
-			return Helpers::ipMatch($remoteAddr, $proxy);
-		}));
+		$usingTrustedProxy = $remoteAddr
+			&& !empty(array_filter(
+				$this->proxies,
+				fn (string $proxy): bool => Helpers::ipMatch($remoteAddr, $proxy)
+			));
 
 		if ($usingTrustedProxy) {
 			[$remoteAddr, $remoteHost] = empty($request->getHeader('HTTP_FORWARDED'))
@@ -159,7 +162,9 @@ class RequestFactory
 	): array {
 
 		if (isset($request->getHeader('HTTP_X_FORWARDED_PROTO')[0])) {
-			$url->setScheme(strcasecmp($request->getHeader('HTTP_X_FORWARDED_PROTO')[0], 'https') === 0 ? 'https' : 'http');
+			$url->setScheme(
+				strcasecmp($request->getHeader('HTTP_X_FORWARDED_PROTO')[0], 'https') === 0 ? 'https' : 'http'
+			);
 			$url->setPort($url->getScheme() === 'https' ? 443 : 80);
 		}
 
@@ -172,7 +177,8 @@ class RequestFactory
 				$request->getHeader('HTTP_X_FORWARDED_FOR'),
 				function (string $ip): bool {
 					return !array_filter($this->proxies, function (string $proxy) use ($ip): bool {
-						return filter_var(trim($ip), FILTER_VALIDATE_IP) !== false && Helpers::ipMatch(trim($ip), $proxy);
+						return filter_var(trim($ip), FILTER_VALIDATE_IP) !== false
+							&& Helpers::ipMatch(trim($ip), $proxy);
 					});
 				}
 			);
@@ -193,25 +199,9 @@ class RequestFactory
 		return [$remoteAddr, $remoteHost];
 	}
 
-	private function createUrlFromRequest(ServerRequestInterface $request): Url
+	private function setAuthorization(Url $url, string $user): void
 	{
-		$url = new Url;
-		$uri = $request->getUri();
-
-		$url->setScheme($uri->getScheme());
-		$url->setHost($uri->getHost());
-		$url->setPort($uri->getPort());
-		$url->setPath($uri->getPath());
-		$url->setQuery($uri->getQuery());
-
-		return $url;
-	}
-
-	private function setAuthorization(Url $url, UriInterface $uri): void
-	{
-		$user = $uri->getUserInfo();
 		$pass = '';
-
 		if (str_contains($user, ':')) {
 			[$user, $pass] = explode(':', $user, 2);
 		}
@@ -220,26 +210,69 @@ class RequestFactory
 		$url->setPassword($pass);
 	}
 
-	/**
-	 * @param array<string, string[]> $headers
-	 * @return array<string, string>
-	 */
-	private function mapHeaders(array $headers): array
+	private function getMethod(): string
 	{
-		return array_map(static fn(array $header) => implode("\n", $header), $headers);
+		return $this->getServerRequest()->getMethod();
 	}
 
 	/**
-	 * @param UploadedFileInterface[] $uploadedFiles
+	 * @return array<string, string>
+	 */
+	private function getCookies(): array
+	{
+		return $this->getServerRequest()->getCookieParams();
+	}
+
+	/**
+	 * @return array<string, string>
+	 */
+	private function getHeaders(): array
+	{
+		return array_map(
+			static fn(array $header) => implode("\n", $header),
+			$this->getServerRequest()->getHeaders()
+		);
+	}
+
+	/**
 	 * @return FileUpload[]
 	 */
-	private function mapUploadedFiles(array $uploadedFiles): array
+	private function getUploadedFiles(): array
 	{
 		return array_map(static fn(UploadedFileInterface $file) => new FileUpload([
 			'name' => $file->getClientFilename(),
 			'size' => $file->getSize(),
 			'error' => $file->getError(),
 			'tmpName' => $file->getStream()->getMetadata('uri'),
-		]), $uploadedFiles);
+		]), $this->getServerRequest()->getUploadedFiles());
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function getPost(): array
+	{
+		return (array) $this->getServerRequest()->getParsedBody();
+	}
+
+	private function getRequestBody(): string
+	{
+		return (string) $this->getServerRequest()->getBody();
+	}
+
+	private function createUrl(): Url
+	{
+		$url = new Url;
+		$uri = $this->getServerRequest()->getUri();
+
+		$url->setScheme($uri->getScheme());
+		$url->setHost($uri->getHost());
+		$url->setPort($uri->getPort());
+		$url->setPath($uri->getPath());
+		$url->setQuery($uri->getQuery());
+
+		$this->setAuthorization($url, $uri->getUserInfo());
+
+		return $url;
 	}
 }

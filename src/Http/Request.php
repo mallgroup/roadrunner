@@ -14,12 +14,12 @@ class Request implements IRequest
 	public function __construct(
 		private RequestFactory $requestFactory
 	) {
-		$this->request = $this->requestFactory->fromRequest();
+		$this->request = $this->requestFactory->getRequest();
 	}
 
 	public function updateFromPsr(ServerRequestInterface $request): void
 	{
-		$this->request = $this->requestFactory->fromPsr($request);
+		$this->request = $this->requestFactory->getRequest($request);
 	}
 
 	public function getUrl(): Http\UrlScript
