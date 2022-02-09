@@ -104,6 +104,8 @@ class PsrApplication
 			}
 			Arrays::invoke($this->onShutdown, $this, $e);
 			throw $e;
+		} finally {
+			$this->httpResponse->setSent(true);
 		}
 	}
 

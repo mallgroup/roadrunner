@@ -10,5 +10,7 @@ interface IResponse extends NetteResponse
 {
 	public function cleanup(): void;
 
+	public function setSent(bool $sent): static;
+
 	public function getReason(): ?string;
 }

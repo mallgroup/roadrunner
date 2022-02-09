@@ -3,6 +3,7 @@
 use Mallgroup\RoadRunner\Http\IResponse;
 use Mallgroup\RoadRunner\Http\Response;
 use Nette\InvalidArgumentException;
+use Nette\Utils\DateTime;
 use Tester\Assert;
 use Nette\Http\Helpers;
 
@@ -16,7 +17,15 @@ test('defaults', function () {
 });
 
 test('set code', function () {
+	http_response_code(201);
+
 	$response = new Response();
+	Assert::same(201, $response->getCode());
+
+	$response->setCode(200, 'Ok');
+	Assert::same(200, $response->getCode());
+	Assert::same('Ok', $response->getReason());
+
 	$response->setCode(201, 'Ok');
 	Assert::same(201, $response->getCode());
 	Assert::same('Ok', $response->getReason());
@@ -27,6 +36,28 @@ test('set code', function () {
 	$response->setCode(599, 'Not very ok');
 	Assert::same(599, $response->getCode());
 	Assert::same('Not very ok', $response->getReason());
+});
+
+test('set sent', function () {
+	$response = new Response();
+	Assert::false($response->isSent());
+
+	$response->setSent(true);
+	Assert::true($response->isSent());
+
+	$response->cleanup();
+	Assert::false($response->isSent());
+});
+
+test('set sent', function () {
+	$response = new Response();
+	Assert::false($response->isSent());
+
+	$response->setSent(true);
+	Assert::true($response->isSent());
+
+	$response->cleanup();
+	Assert::false($response->isSent());
 });
 
 test('set header', function () {
@@ -87,6 +118,36 @@ test('set expiration', function () {
 	Assert::null($response->getHeader('Pragma'));
 });
 
+
+test('content-type header', function () {
+	$response = new Response();
+	$response->setContentType('application/json');
+	Assert::same('application/json', $response->getHeader('Content-Type'));
+
+	$response->setContentType('text/plain', 'utf8');
+	Assert::same('text/plain; charset=utf8', $response->getHeader('Content-Type'));
+});
+
+test('redirect', function () {
+	$response = new Response();
+
+	ob_start();
+	$response->redirect('https://www.domain.com', 301);
+	$content = ob_get_clean();
+
+	Assert::same(301, $response->getCode());
+	Assert::same('https://www.domain.com', $response->getHeader('Location'));
+	Assert::contains('https://www.domain.com', $content);
+
+	ob_start();
+	$response->redirect('ftp://www.domain.com/file', 302);
+	$content = ob_get_clean();
+
+	Assert::same(302, $response->getCode());
+	Assert::same('ftp://www.domain.com/file', $response->getHeader('Location'));
+	Assert::notContains('ftp://www.domain.com', $content);
+});
+
 test('setCookie', function () {
 	$response = new Response();
 	$response->setCookie('test', 'value', 0);
@@ -99,6 +160,34 @@ test('setCookie', function () {
 	Assert::notNull($response->getHeaders()['Set-Cookie'] ?? null);
 	Assert::same(
 		['test=value; path=/; SameSite=Lax; HttpOnly', 'test=newvalue; path=/; SameSite=Lax; HttpOnly'],
+		$response->getHeaders()['Set-Cookie'],
+	);
+});
+
+test('setCookie with expire', function () {
+	$response = new Response();
+	$time = time() + 300;
+
+	$response->setCookie('test', 'newvalue', $time, secure: true);
+	Assert::notNull($response->getHeaders()['Set-Cookie'] ?? null);
+	Assert::same(
+		['test=newvalue; path=/; SameSite=Lax; Expires=' . DateTime::from($time)->format('D, d M Y H:i:s T') . '; secure; HttpOnly'],
+		$response->getHeaders()['Set-Cookie'],
+	);
+});
+
+test('deleteCookie', function () {
+	$response = new Response();
+	$response->deleteCookie('test');
+	Assert::same(
+		['test=; path=/; SameSite=Lax; HttpOnly'],
+		$response->getHeaders()['Set-Cookie'],
+	);
+
+	$response->cleanup();
+	$response->deleteCookie('test', secure: true);
+	Assert::same(
+		['test=; path=/; SameSite=Lax; secure; HttpOnly'],
 		$response->getHeaders()['Set-Cookie'],
 	);
 });
