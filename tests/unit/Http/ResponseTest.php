@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 use Mallgroup\RoadRunner\Http\IResponse;
 use Mallgroup\RoadRunner\Http\Response;
@@ -85,4 +85,80 @@ test('set expiration', function () {
 	Assert::same('max-age='.$maxAge, $response->getHeader('Cache-Control'));
 	Assert::same(Helpers::formatDate($currentDateTime), $response->getHeader('Expires'));
 	Assert::null($response->getHeader('Pragma'));
+});
+
+test('setCookie', function () {
+	$response = new Response();
+	$response->setCookie('test', 'value', 0);
+	Assert::same(
+		'test=value; path=/; SameSite=Lax; HttpOnly',
+		$response->getHeader('Set-Cookie')
+	);
+	
+	$response->setCookie('test', 'newvalue', 0);
+	Assert::notNull($response->getHeaders()['Set-Cookie'] ?? null);
+	Assert::same(
+		['test=value; path=/; SameSite=Lax; HttpOnly', 'test=newvalue; path=/; SameSite=Lax; HttpOnly'],
+		$response->getHeaders()['Set-Cookie'],
+	);
+});
+
+test('setCookie - cookiePath', function () {
+	$response = new Response();
+	$response->cookiePath = '/foo';
+	$response->setCookie('test', 'a', 0);
+	Assert::same(
+		'test=a; path=/foo; SameSite=Lax; HttpOnly',
+		$response->getHeader('Set-Cookie')
+	);
+});
+
+test('setCookie - cookiePath + path', function () {
+	$response = new Response();
+	$response->cookiePath = '/foo';
+	$response->setCookie('test', 'b', 0, '/bar');
+	Assert::same(
+		'test=b; path=/bar; SameSite=Lax; HttpOnly',
+		$response->getHeader('Set-Cookie')
+	);
+});
+
+test('setCookie - cookiePath + domain', function () {
+	$response = new Response();
+	$response->cookiePath = '/foo';
+	$response->setCookie('test', 'c', 0, null, 'nette.org');
+	Assert::same(
+		'test=c; path=/; SameSite=Lax; domain=nette.org; HttpOnly',
+		$response->getHeader('Set-Cookie')
+	);
+});
+
+test('setCookie - cookieDomain', function () {
+	$response = new Response();
+	$response->cookieDomain = 'nette.org';
+	$response->setCookie('test', 'd', 0);
+	Assert::same(
+		'test=d; path=/; SameSite=Lax; domain=nette.org; HttpOnly',
+		$response->getHeader('Set-Cookie')
+	);
+});
+
+test('setCookie - cookieDomain + path', function () {
+	$response = new Response();
+	$response->cookieDomain = 'nette.org';
+	$response->setCookie('test', 'e', 0, '/bar');
+	Assert::same(
+		'test=e; path=/bar; SameSite=Lax; HttpOnly',
+		$response->getHeader('Set-Cookie')
+	);
+});
+
+test('setCookie - cookieDomain + domain', function () {
+	$response = new Response();
+	$response->cookieDomain = 'nette.org';
+	$response->setCookie('test', 'f', 0, null, 'example.org');
+	Assert::same(
+		'test=f; path=/; SameSite=Lax; domain=example.org; HttpOnly',
+		$response->getHeader('Set-Cookie')
+	);
 });
