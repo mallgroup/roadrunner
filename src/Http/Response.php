@@ -14,6 +14,7 @@ class Response implements IResponse
 	private array $headers = [];
 	private int $code = self::S200_OK;
 	private ?string $reason = null;
+	private bool $sent = false;
 
 	public string $cookieDomain = '';
 	public string $cookiePath = '/';
@@ -30,6 +31,7 @@ class Response implements IResponse
 	{
 		$this->headers = [];
 		$this->code = self::S200_OK;
+		$this->sent = false;
 		$this->reason = null;
 	}
 
@@ -99,7 +101,13 @@ class Response implements IResponse
 
 	public function isSent(): bool
 	{
-		return false;
+		return $this->sent;
+	}
+
+	public function setSent(bool $sent): static
+	{
+		$this->sent = true;
+		return $this;
 	}
 
 	public function getHeader(string $header): ?string
@@ -135,7 +143,6 @@ class Response implements IResponse
 			$sameSite ?? self::SAME_SITE_LAX,
 		);
 		
-		$cookieDomain = $domain ?? $this->cookieDomain;
 		if ($expire) {
 			$headerValue .= '; Expires='.(DateTime::from($expire)->format('D, d M Y H:i:s T'));
 		}

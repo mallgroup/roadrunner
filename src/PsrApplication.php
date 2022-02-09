@@ -17,11 +17,11 @@ use Nette\Application\UI;
 use Nette\Routing\Router;
 use Nette\Utils\Arrays;
 use Nyholm\Psr7\Response as PsrResponse;
-use Mallgroup\RoadRunner\DI\Container;
 use Mallgroup\RoadRunner\Http\IRequest;
 use Mallgroup\RoadRunner\Http\IResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Throwable;
 
 class PsrApplication
 {
@@ -34,7 +34,7 @@ class PsrApplication
 	/** @var array<callable(self): void>  Occurs before the application loads presenter */
 	public $onStartup = [];
 
-	/** @var array<callable(self, ?\Throwable): void>  Occurs before the application shuts down */
+	/** @var array<callable(self, ?Throwable): void>  Occurs before the application shuts down */
 	public $onShutdown = [];
 
 	/** @var array<callable(self, IRequest): void>  Occurs when a new request is received */
@@ -46,7 +46,10 @@ class PsrApplication
 	/** @var array<callable(self, IResponse): void>  Occurs when a new response is ready for dispatch */
 	public $onResponse = [];
 
-	/** @var array<callable(self, \Throwable): void>  Occurs when an unhandled exception occurs in the application */
+	/** @var array<callable(self, IResponse): void>  Occurs after response is sent to client */
+	public $onFlush = [];
+
+	/** @var array<callable(self, Throwable): void>  Occurs when an unhandled exception occurs in the application */
 	public $onError = [];
 
 	/** @var Request[] */
@@ -62,36 +65,66 @@ class PsrApplication
 	) {
 	}
 
+	/**
+	 * @throws InvalidPresenterException
+	 * @throws Throwable
+	 * @throws BadRequestException
+	 * @throws ApplicationException
+	 */
 	public function run(ServerRequestInterface $request): ResponseInterface
 	{
 		try {
-			$this->httpRequest->updateFromPsr($request);
-			$this->httpResponse->cleanup();
-			$this->requests = [];
-			$this->presenter = null;
-
+			$this->initialize($request);
 			Arrays::invoke($this->onStartup, $this);
 			$response = $this->processRequest($this->createInitialRequest());
 			Arrays::invoke($this->onShutdown, $this);
 
-			return new PsrResponse($this->httpResponse->getCode(), $this->httpResponse->getHeaders(), $response, reason: $this->httpResponse->getReason());
-		} catch (\Throwable $e) {
+			return new PsrResponse(
+				$this->httpResponse->getCode(),
+				$this->httpResponse->getHeaders(),
+				$response,
+				reason: $this->httpResponse->getReason()
+			);
+		} catch (Throwable $e) {
 			Arrays::invoke($this->onError, $this, $e);
 			if ($this->catchExceptions && $this->errorPresenter) {
 				try {
 					$response = $this->processException($e);
 					Arrays::invoke($this->onShutdown, $this, $e);
 
-					return new PsrResponse($this->httpResponse->getCode(), $this->httpResponse->getHeaders(), $response, reason: $this->httpResponse->getReason());
-				} catch (\Throwable $e) {
+					return new PsrResponse(
+						$this->httpResponse->getCode(),
+						$this->httpResponse->getHeaders(),
+						$response,
+						reason: $this->httpResponse->getReason()
+					);
+				} catch (Throwable $e) {
 					Arrays::invoke($this->onError, $this, $e);
 				}
 			}
 			Arrays::invoke($this->onShutdown, $this, $e);
 			throw $e;
+		} finally {
+			$this->httpResponse->setSent(true);
 		}
 	}
 
+	public function afterResponse(): void
+	{
+		Arrays::invoke($this->onFlush, $this);
+	}
+
+	public function initialize(ServerRequestInterface $request): void
+	{
+		$this->httpRequest->updateFromPsr($request);
+		$this->httpResponse->cleanup();
+		$this->requests = [];
+		$this->presenter = null;
+	}
+
+	/**
+	 * @throws BadRequestException
+	 */
 	public function createInitialRequest(): Request
 	{
 		$params = $this->router->match($this->httpRequest);
@@ -116,6 +149,11 @@ class PsrApplication
 		);
 	}
 
+	/**
+	 * @throws InvalidPresenterException
+	 * @throws ApplicationException
+	 * @throws BadRequestException
+	 */
 	public function processRequest(Request $request): string
 	{
 		process:
@@ -153,7 +191,12 @@ class PsrApplication
 		return (string) ob_get_clean();
 	}
 
-	public function processException(\Throwable $e): string
+	/**
+	 * @throws InvalidPresenterException
+	 * @throws BadRequestException
+	 * @throws ApplicationException
+	 */
+	public function processException(Throwable $e): string
 	{
 		$this->httpResponse->setCode($e instanceof BadRequestException ? ($e->getHttpCode() ?: 404) : 500);
 		$args = ['exception' => $e, 'request' => Arrays::last($this->requests) ?: null];

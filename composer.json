@@ -42,6 +42,7 @@
 		"fix-style": "./vendor/bin/phpcbf -p -n --standard=ruleset.xml",
 		"phpstan": "phpstan analyse",
 		"psalm": "psalm",
+		"tests-unit": "@unit-tests",
 		"unit-tests": "tester -o console ./tests/unit"
 	},
 	"minimum-stability": "stable",
