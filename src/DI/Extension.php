@@ -54,12 +54,12 @@ class Extension extends Nette\DI\CompilerExtension
 
 		# Add roadrunner PSR requirements
 		$builder->addDefinition($this->prefix('worker'))
-		        ->setFactory('Spiral\RoadRunner\Worker::create')
-		        ->setType(WorkerInterface::class)
-		        ->setAutowired(false);
+				->setFactory('Spiral\RoadRunner\Worker::create')
+				->setType(WorkerInterface::class)
+				->setAutowired(false);
 		$builder->addDefinition($this->prefix('psr17factory'))
-		        ->setFactory(Psr17Factory::class)
-		        ->setAutowired(false);
+				->setFactory(Psr17Factory::class)
+				->setAutowired(false);
 		$builder->addDefinition($this->prefix('psrWorker'))->setFactory(PSR7Worker::class, [
 			'@' . $this->prefix('worker'),
 			'@' . $this->prefix('psr17factory'),
@@ -76,13 +76,14 @@ class Extension extends Nette\DI\CompilerExtension
 
 		# Add PSRApplication
 		$builder->addDefinition($this->prefix('application'))
-		        ->setFactory(PsrApplication::class)
-		        ->addSetup('$catchExceptions', [$config->catchExceptions])
-		        ->addSetup('$errorPresenter', [$config->errorPresenter]);
+				->setFactory(PsrApplication::class)
+				->addSetup('$catchExceptions', [$config->catchExceptions])
+				->addSetup('$errorPresenter', [$config->errorPresenter]);
 
 		# Session should be ours, to support RR
-		$builder->getDefinitionByType(Session::class)
-			->setFactory(\Mallgroup\RoadRunner\Http\Session::class)
+		/** @var Nette\DI\Definitions\ServiceDefinition $sessionDefinition */
+		$sessionDefinition = $builder->getDefinitionByType(Session::class);
+		$sessionDefinition->setFactory(\Mallgroup\RoadRunner\Http\Session::class)
 			->setType(\Mallgroup\RoadRunner\Http\Session::class);
 	}
 
@@ -92,8 +93,9 @@ class Extension extends Nette\DI\CompilerExtension
 
 		# Setup blueScreen if possible
 		if ($builder->getByType(Tracy\BlueScreen::class)) {
-			$builder->getDefinition($this->prefix('application'))
-			        ->addSetup([self::class, 'initializeBlueScreenPanel']);
+			/** @var Nette\DI\Definitions\ServiceDefinition $serviceDefinition */
+			$serviceDefinition = $builder->getDefinition($this->prefix('application'));
+			$serviceDefinition->addSetup([self::class, 'initializeBlueScreenPanel']);
 		}
 	}
 
@@ -105,6 +107,7 @@ class Extension extends Nette\DI\CompilerExtension
 		PsrApplication $application,
 	): void {
 		$blueScreen->addPanel(function (?\Throwable $e) use ($application, $blueScreen, $httpResponse, $httpRequest): ?array {
+			/** @psalm-suppress InternalMethod */
 			$dumper = $blueScreen->getDumper();
 			return $e ? null : [
 				'tab' => 'Psr Application',

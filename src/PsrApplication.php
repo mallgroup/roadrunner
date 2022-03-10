@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mallgroup\RoadRunner;
 
+use Mallgroup\RoadRunner\Http\Session;
 use Nette;
 use Nette\Application\AbortException;
 use Nette\Application\ApplicationException;
@@ -64,7 +65,7 @@ class PsrApplication
 		private Router $router,
 		private IRequest $httpRequest,
 		private IResponse $httpResponse,
-		private Nette\Http\Session $session,
+		private Session $session,
 	) {
 		$this->onResponse[] = function () {
 			$this->session->sendCookie();
@@ -206,7 +207,7 @@ class PsrApplication
 	public function processException(Throwable $e): string
 	{
 		$this->httpResponse->setCode($e instanceof BadRequestException ? ($e->getHttpCode() ?: 404) : 500);
-		$args = ['exception' => $e, 'request' => Arrays::last($this->requests) ?: null];
+		$args = ['exception' => $e, 'request' => Arrays::last($this->requests)];
 
 		if ($this->presenter instanceof UI\Presenter) {
 			try {

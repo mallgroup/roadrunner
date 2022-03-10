@@ -3,7 +3,6 @@
 namespace Mallgroup\RoadRunner\Http;
 
 use Nette;
-use Nette\Http\IRequest;
 use Nette\Http\IResponse;
 use Nette\Http\SessionSection;
 use Nette\Utils\DateTime;
@@ -29,7 +28,7 @@ class Session extends \Nette\Http\Session
 	protected bool $regenerated = false;
 	protected bool $started = false;
 
-	/** @var array default configuration */
+	/** @var array<string|int|null|bool> default configuration */
 	protected array $options = [
 		'cookie_samesite' => IResponse::SAME_SITE_LAX,
 		'cookie_lifetime' => 0,   // for a maximum of 3 hours or until the browser is closed
@@ -43,8 +42,8 @@ class Session extends \Nette\Http\Session
 	private bool $configured = false;
 
 	public function __construct(
-		protected IRequest $request,
-		protected IResponse $response
+		protected Request $request,
+		protected Response $response
 	) {
 		parent::__construct($this->request, $this->response);
 		$this->options['cookie_path'] = &$this->response->cookiePath;
@@ -72,6 +71,7 @@ class Session extends \Nette\Http\Session
 
 	/**
 	 * Configures session environment.
+	 * @param array<string|int|bool|null> $config
 	 */
 	private function configure(array $config): void
 	{
@@ -81,10 +81,8 @@ class Session extends \Nette\Http\Session
 		foreach ($config as $key => $value) {
 			if ($value === null || ini_get("session.$key") == $value) { // intentionally ==
 				continue;
-
 			} elseif (strncmp($key, 'cookie_', 7) === 0) {
 				$cookie[substr($key, 7)] = $value;
-
 			} else {
 				if (session_status() === PHP_SESSION_ACTIVE) {
 					throw new Nette\InvalidStateException(
@@ -94,10 +92,8 @@ class Session extends \Nette\Http\Session
 				}
 				if (isset($special[$key])) {
 					("session_$key")($value);
-
 				} elseif (function_exists('ini_set')) {
 					ini_set("session.$key", (string)$value);
-
 				} else {
 					throw new Nette\NotSupportedException(
 						"Unable to set 'session.$key' to '$value' because function ini_set() is disabled."
@@ -142,7 +138,7 @@ class Session extends \Nette\Http\Session
 	 */
 	public function getName(): string
 	{
-		return $this->options['name'] ?? session_name();
+		return (string) ($this->options['name'] ?? session_name());
 	}
 
 	/**
@@ -150,7 +146,7 @@ class Session extends \Nette\Http\Session
 	 */
 	public function getId(): string
 	{
-		return session_id();
+		return (string) session_id();
 	}
 
 	/**
@@ -159,7 +155,7 @@ class Session extends \Nette\Http\Session
 	public function close(): void
 	{
 		if (session_status() === PHP_SESSION_ACTIVE) {
-			if ($this->request->getCookie(session_name()) !== session_id()) {
+			if ($this->request->getCookie((string) session_name()) !== session_id()) {
 				$this->sendCookie();
 			}
 			$this->clean();
@@ -209,9 +205,8 @@ class Session extends \Nette\Http\Session
 				'gc_maxlifetime' => self::DEFAULT_FILE_LIFETIME,
 				'cookie_lifetime' => 0,
 			]);
-
 		} else {
-			$time = DateTime::from($time)->format('U') - time();
+			$time = (int) DateTime::from($time)->format('U') - time();
 			return $this->setOptions([
 				'gc_maxlifetime' => $time,
 				'cookie_lifetime' => $time,
@@ -221,6 +216,7 @@ class Session extends \Nette\Http\Session
 
 	/**
 	 * Returns all session options.
+	 * @return array<string, string|int|bool|null>
 	 */
 	public function getOptions(): array
 	{
@@ -229,13 +225,15 @@ class Session extends \Nette\Http\Session
 
 	/**
 	 * Sets session options.
+	 * @param array<mixed> $options
 	 * @throws Nette\NotSupportedException
 	 * @throws Nette\InvalidStateException
 	 */
 	public function setOptions(array $options): static
 	{
 		$normalized = [];
-		$allowed = ini_get_all('session', false) + ['session.read_and_close' => 0, 'session.cookie_samesite' => 1]; // for PHP < 7.3
+		$allowed = (array) ini_get_all('session', false)
+			+ ['session.read_and_close' => 0, 'session.cookie_samesite' => 1];
 
 		foreach ($options as $key => $value) {
 			if (!strncmp($key, 'session.', 8)) { // back compatibility
@@ -256,7 +254,7 @@ class Session extends \Nette\Http\Session
 			$normalized[$normKey] = $value;
 		}
 
-		$this->autoStart = $normalized['auto_start'] ?? true;
+		$this->autoStart = (bool) ($normalized['auto_start'] ?? true);
 		unset($normalized['auto_start']);
 
 		if (session_status() === PHP_SESSION_ACTIVE) {
@@ -354,7 +352,6 @@ class Session extends \Nette\Http\Session
 	{
 		if ($this->started || (!$forWrite && !$this->exists())) {
 			return;
-
 		} elseif (!$this->autoStart) {
 			trigger_error('Cannot auto-start session because autostarting is disabled', E_USER_WARNING);
 			return;
@@ -363,7 +360,7 @@ class Session extends \Nette\Http\Session
 		$this->doStart(!$forWrite);
 	}
 
-	private function doStart($mustExists = false): void
+	private function doStart(bool $mustExists = false): void
 	{
 		if (session_status() === PHP_SESSION_ACTIVE && !$this->started) { // adapt an existing session
 			$this->initialize();
@@ -371,7 +368,8 @@ class Session extends \Nette\Http\Session
 		}
 
 		if (!$this->started) { // session is started for first time
-			$id = $this->request->getCookie(session_name());
+			$id = $this->request->getCookie((string) session_name());
+			/** @var string $id */
 			$id = is_string($id) && preg_match('#^[0-9a-zA-Z,-]{22,256}$#Di', $id)
 				? $id
 				: session_create_id();
@@ -395,7 +393,7 @@ class Session extends \Nette\Http\Session
 			throw $e;
 		}
 
-		if ($mustExists && $this->request->getCookie(session_name()) !== session_id()) {
+		if ($mustExists && $this->request->getCookie((string) session_name()) !== session_id()) {
 			// PHP regenerated the ID which means that the session did not exist and cookie was invalid
 			$this->destroy();
 			return;
@@ -423,7 +421,7 @@ class Session extends \Nette\Http\Session
 		// regenerate empty session
 		if (empty($nf['Time'])) {
 			$nf['Time'] = time();
-			if ($this->request->getCookie(session_name()) === session_id()) {
+			if ($this->request->getCookie((string) session_name()) === session_id()) {
 				// ensures that the session was created with use_strict_mode (ie by Nette)
 				$this->regenerateId();
 			}
@@ -456,13 +454,14 @@ class Session extends \Nette\Http\Session
 		if (session_status() === PHP_SESSION_ACTIVE) {
 			session_regenerate_id(true);
 		} else {
-			session_id(session_create_id());
+			session_id(session_create_id() ?: null);
 		}
 		$this->regenerated = true;
 	}
 
 	/**
 	 * Destroys all data registered to a session.
+	 * @throws \Exception
 	 */
 	public function destroy(): void
 	{
@@ -475,13 +474,13 @@ class Session extends \Nette\Http\Session
 		$this->started = false;
 		$this->regenerated = false;
 		$params = session_get_cookie_params();
-		$this->response->deleteCookie(session_name(), $params['path'], $params['domain'], $params['secure']);
+		$this->response->deleteCookie((string) session_name(), $params['path'], $params['domain'], $params['secure']);
 	}
 
 	/**
 	 * Iteration over all sections.
 	 */
-	public function getIterator(): \Iterator
+	public function getIterator(): \ArrayIterator
 	{
 		if ($this->exists() && !$this->started) {
 			$this->autoStart(false);

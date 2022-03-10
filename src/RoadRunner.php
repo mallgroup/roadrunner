@@ -88,7 +88,9 @@ class RoadRunner
 			]);
 
 			if ($this->showExceptions) {
+				/** @var BlueScreen|null $blueScreen */
 				$blueScreen = $this->container->getByType(BlueScreen::class, false);
+				/** @var IRequest|null $request */
 				$request = $this->container->getByType(IRequest::class, false);
 
 				if (!$request?->isAjax() && $blueScreen) {
