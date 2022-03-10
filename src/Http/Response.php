@@ -19,6 +19,7 @@ class Response implements IResponse
 	public string $cookieDomain = '';
 	public string $cookiePath = '/';
 	public bool $cookieSecure = false;
+	public ?bool $cookieHttpOnly = null;
 
 	public function __construct()
 	{
@@ -134,7 +135,6 @@ class Response implements IResponse
 		?bool $httpOnly = null,
 		?string $sameSite = null,
 	): static {
-		
 		$headerValue = sprintf(
 			'%s=%s; path=%s; SameSite=%s',
 			$name,

@@ -4,28 +4,42 @@ declare(strict_types=1);
 
 namespace Mallgroup\RoadRunner;
 
+use Mallgroup\RoadRunner\Http\Session;
 use Nyholm\Psr7\Response;
 use Nette\DI\Container;
 use Nette\Http\IResponse;
 use Mallgroup\RoadRunner\Http\IRequest;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Log\LoggerInterface;
 use Spiral\RoadRunner\Http\PSR7WorkerInterface;
 use Throwable;
 use Tracy\BlueScreen;
 
 class RoadRunner
 {
-	private ?PsrApplication $application = null;
+	private PsrApplication $application;
+	private Session $session;
+	private ?LoggerInterface $logger = null;
 
 	public function __construct(
 		private PSR7WorkerInterface $worker,
 		private Container $container,
 		private bool $showExceptions = false,
 	) {
+		try {
+			$this->application = $this->container->getByType(PsrApplication::class);
+			$this->session = $this->container->getByType(Session::class);
+			$this->logger = $this->container->getByType(LoggerInterface::class, false);
+		} catch (\Throwable) {
+			$this->worker->getWorker()->error('Failed to load application');
+			$this->worker->getWorker()->stop();
+		}
 	}
 
 	public function run(): void
 	{
+		$this->session->setup();
+
 		while (true) {
 			try {
 				$request = $this->worker->waitRequest();
@@ -38,30 +52,41 @@ class RoadRunner
 			}
 
 			try {
-				$this->worker->respond(
-					$this->getApplication()->run($request)
-				);
+				$response = new Response;
+				ob_start(function () {
+				});
+				$response = $this->application->run($request, $response);
+				$content = ob_get_clean();
+				if ($content) {
+					$this->logger->warning(
+						'Unexpected output found on request, you are pushing to output instead of Response',
+						[
+							'length' => strlen($content),
+							'content' => substr($content, 0, 300) . (strlen($content) > 300 ? '... (shorted)' : ''),
+						],
+					);
+				}
+
+				$this->worker->respond($response);
 			} catch (Throwable $e) {
 				$this->worker->respond($this->processException($e));
 			} finally {
-				$this->getApplication()->afterResponse();
+				$this->application->afterResponse($this->container);
 			}
 		}
-	}
-
-	private function getApplication(): PsrApplication
-	{
-		if (null === $this->application) {
-			/** @psalm-var PsrApplication @phpstan-ignore-next-line */
-			$this->application = $this->container->getByType(PsrApplication::class);
-		}
-		return $this->application;
 	}
 
 	private function processException(Throwable $e): Response
 	{
 		try {
 			$headers = ['Content-Type' => 'text/json'];
+			$this->logger?->error($e->getMessage(), [
+				'code' => $e->getCode(),
+				'file' => $e->getFile(),
+				'line' => $e->getLine(),
+				'trace' => $e->getTrace(),
+			]);
+
 			if ($this->showExceptions) {
 				$blueScreen = $this->container->getByType(BlueScreen::class, false);
 				$request = $this->container->getByType(IRequest::class, false);

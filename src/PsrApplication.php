@@ -14,11 +14,12 @@ use Nette\Application\IPresenterFactory;
 use Nette\Application\Request;
 use Nette\Application\Responses;
 use Nette\Application\UI;
+use Nette\Http\Helpers;
 use Nette\Routing\Router;
 use Nette\Utils\Arrays;
-use Nyholm\Psr7\Response as PsrResponse;
 use Mallgroup\RoadRunner\Http\IRequest;
 use Mallgroup\RoadRunner\Http\IResponse;
+use Nyholm\Psr7\Stream;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Throwable;
@@ -52,6 +53,7 @@ class PsrApplication
 	/** @var array<callable(self, Throwable): void>  Occurs when an unhandled exception occurs in the application */
 	public $onError = [];
 
+
 	/** @var Request[] */
 	private array $requests = [];
 
@@ -62,7 +64,16 @@ class PsrApplication
 		private Router $router,
 		private IRequest $httpRequest,
 		private IResponse $httpResponse,
+		private Nette\Http\Session $session,
 	) {
+		$this->onResponse[] = function () {
+			$this->session->sendCookie();
+			$this->session->close();
+
+			if (!$this->httpRequest->getCookie(Helpers::STRICT_COOKIE_NAME)) {
+				Helpers::initCookie($this->httpRequest, $this->httpResponse);
+			}
+		};
 	}
 
 	/**
@@ -71,33 +82,23 @@ class PsrApplication
 	 * @throws BadRequestException
 	 * @throws ApplicationException
 	 */
-	public function run(ServerRequestInterface $request): ResponseInterface
+	public function run(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
 	{
 		try {
 			$this->initialize($request);
 			Arrays::invoke($this->onStartup, $this);
-			$response = $this->processRequest($this->createInitialRequest());
+			$content = $this->processRequest($this->createInitialRequest());
 			Arrays::invoke($this->onShutdown, $this);
 
-			return new PsrResponse(
-				$this->httpResponse->getCode(),
-				$this->httpResponse->getHeaders(),
-				$response,
-				reason: $this->httpResponse->getReason()
-			);
+			return $this->processResponse($response, $content);
 		} catch (Throwable $e) {
 			Arrays::invoke($this->onError, $this, $e);
 			if ($this->catchExceptions && $this->errorPresenter) {
 				try {
-					$response = $this->processException($e);
+					$content = $this->processException($e);
 					Arrays::invoke($this->onShutdown, $this, $e);
 
-					return new PsrResponse(
-						$this->httpResponse->getCode(),
-						$this->httpResponse->getHeaders(),
-						$response,
-						reason: $this->httpResponse->getReason()
-					);
+					return $this->processResponse($response, $content);
 				} catch (Throwable $e) {
 					Arrays::invoke($this->onError, $this, $e);
 				}
@@ -105,19 +106,24 @@ class PsrApplication
 			Arrays::invoke($this->onShutdown, $this, $e);
 			throw $e;
 		} finally {
+			$this->session->close();
 			$this->httpResponse->setSent(true);
 		}
 	}
 
-	public function afterResponse(): void
+	public function afterResponse(Nette\DI\Container $container): void
 	{
 		Arrays::invoke($this->onFlush, $this);
+
+		$container->removeService('nette.templateFactory');
+		$container->removeService('user');
+		$container->removeService('nette.userStorage');
 	}
 
 	public function initialize(ServerRequestInterface $request): void
 	{
-		$this->httpRequest->updateFromPsr($request);
 		$this->httpResponse->cleanup();
+		$this->httpRequest->updateFromPsr($request);
 
 		$this->requests = [];
 		$this->presenter = null;
@@ -245,5 +251,19 @@ class PsrApplication
 	public function getPresenterFactory(): IPresenterFactory
 	{
 		return $this->presenterFactory;
+	}
+
+	protected function processResponse(ResponseInterface $response, string $content): ResponseInterface
+	{
+		// set status
+		$response = $response->withStatus($this->httpResponse->getCode(), $this->httpResponse->getReason());
+
+		// set headers with deduplication
+		foreach ($this->httpResponse->getHeaders() as $name => $value) {
+			$response = $response->withAddedHeader($name, array_unique($value));
+		}
+
+		// add body
+		return $response->withBody(Stream::create($content));
 	}
 }
