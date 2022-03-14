@@ -112,16 +112,12 @@ class PsrApplication
 		}
 	}
 
-	public function afterResponse(Nette\DI\Container $container): void
+	public function afterResponse(): void
 	{
 		Arrays::invoke($this->onFlush, $this);
-
-		$container->removeService('nette.templateFactory');
-		$container->removeService('user');
-		$container->removeService('nette.userStorage');
 	}
 
-	public function initialize(ServerRequestInterface $request): void
+	protected function initialize(ServerRequestInterface $request): void
 	{
 		$this->httpResponse->cleanup();
 		$this->httpRequest->updateFromPsr($request);
@@ -133,7 +129,7 @@ class PsrApplication
 	/**
 	 * @throws BadRequestException
 	 */
-	public function createInitialRequest(): Request
+	protected function createInitialRequest(): Request
 	{
 		$params = $this->router->match($this->httpRequest);
 		$presenter = $params[UI\Presenter::PRESENTER_KEY] ?? null;
@@ -162,7 +158,7 @@ class PsrApplication
 	 * @throws ApplicationException
 	 * @throws BadRequestException
 	 */
-	public function processRequest(Request $request): string
+	protected function processRequest(Request $request): string
 	{
 		process:
 		if (count($this->requests) > $this->maxLoop) {
@@ -204,7 +200,7 @@ class PsrApplication
 	 * @throws BadRequestException
 	 * @throws ApplicationException
 	 */
-	public function processException(Throwable $e): string
+	protected function processException(Throwable $e): string
 	{
 		$this->httpResponse->setCode($e instanceof BadRequestException ? ($e->getHttpCode() ?: 404) : 500);
 		$args = ['exception' => $e, 'request' => Arrays::last($this->requests)];

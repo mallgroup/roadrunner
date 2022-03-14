@@ -21,6 +21,8 @@ class RoadRunner
 	private Session $session;
 	private ?LoggerInterface $logger = null;
 
+	private array $servicesToFlush = ['nette.templateFactory', 'user', 'nette.userStorage'];
+
 	public function __construct(
 		private PSR7WorkerInterface $worker,
 		private Container $container,
@@ -30,6 +32,13 @@ class RoadRunner
 			$this->application = $this->container->getByType(PsrApplication::class);
 			$this->session = $this->container->getByType(Session::class);
 			$this->logger = $this->container->getByType(LoggerInterface::class, false);
+
+			$this->session->setup();
+			$this->application->onFlush[] = function () {
+				foreach ($this->servicesToFlush as $service) {
+					$this->container->removeService($service);
+				}
+			};
 		} catch (\Throwable) {
 			$this->worker->getWorker()->error('Failed to load application');
 			$this->worker->getWorker()->stop();
@@ -38,8 +47,6 @@ class RoadRunner
 
 	public function run(): void
 	{
-		$this->session->setup();
-
 		while (true) {
 			try {
 				$request = $this->worker->waitRequest();
@@ -53,8 +60,7 @@ class RoadRunner
 
 			try {
 				$response = new Response;
-				ob_start(function () {
-				});
+				ob_start();
 				$response = $this->application->run($request, $response);
 				$content = ob_get_clean();
 				if ($content) {
@@ -71,7 +77,7 @@ class RoadRunner
 			} catch (Throwable $e) {
 				$this->worker->respond($this->processException($e));
 			} finally {
-				$this->application->afterResponse($this->container);
+				$this->application->afterResponse();
 			}
 		}
 	}
