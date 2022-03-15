@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Mallgroup\RoadRunner\DI;
 
+use Mallgroup\RoadRunner\PsrChain;
 use Nette;
+use Nette\Http\Session;
+use Tracy;
 use Nette\Schema\Expect;
 use Nette\Schema\Schema;
 use Nyholm\Psr7\Factory\Psr17Factory;
@@ -76,5 +79,45 @@ class Extension extends Nette\DI\CompilerExtension
 				->setFactory(PsrApplication::class)
 				->addSetup('$catchExceptions', [$config->catchExceptions])
 				->addSetup('$errorPresenter', [$config->errorPresenter]);
+
+		# Session should be ours, to support RR
+		/** @var Nette\DI\Definitions\ServiceDefinition $sessionDefinition */
+		$sessionDefinition = $builder->getDefinitionByType(Session::class);
+		$sessionDefinition->setFactory(\Mallgroup\RoadRunner\Http\Session::class)
+			->setType(\Mallgroup\RoadRunner\Http\Session::class);
 	}
+
+	public function beforeCompile()
+	{
+		$builder = $this->getContainerBuilder();
+
+		# Setup blueScreen if possible
+		if ($builder->getByType(Tracy\BlueScreen::class)) {
+			/** @var Nette\DI\Definitions\ServiceDefinition $serviceDefinition */
+			$serviceDefinition = $builder->getDefinition($this->prefix('application'));
+			$serviceDefinition->addSetup([self::class, 'initializeBlueScreenPanel']);
+		}
+	}
+
+	/** @internal */
+	public static function initializeBlueScreenPanel(
+		Tracy\BlueScreen $blueScreen,
+		Nette\Http\IRequest $httpRequest,
+		Nette\Http\IResponse $httpResponse,
+		PsrApplication $application,
+	): void {
+		$blueScreen->addPanel(function (?\Throwable $e) use ($application, $blueScreen, $httpResponse, $httpRequest): ?array {
+			/** @psalm-suppress InternalMethod */
+			$dumper = $blueScreen->getDumper();
+			return $e ? null : [
+				'tab' => 'Psr Application',
+				'panel' => '<h3>Requests</h3>' . $dumper($application->getRequests())
+					. '<h3>Presenter</h3>' . $dumper($application->getPresenter())
+					. '<h3>Http/Request</h3>' . $dumper($httpRequest)
+					. '<h3>Http/Response</h3>' . $dumper($httpResponse),
+			];
+		});
+	}
+
+	/** Nette\Http\Helpers::initCookie(self::$defaultHttpRequest, new Nette\Http\Response);  */
 }

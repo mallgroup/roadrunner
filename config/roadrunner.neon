@@ -3,3 +3,7 @@ extensions:
 
 roadrunner:
 	showExceptions: true
+	middlewares:
+	    - TracyMiddleware
+	    - SessionMiddleware
+	    - PsrApplication
