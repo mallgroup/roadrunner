@@ -46,11 +46,11 @@ class Extension extends Nette\DI\CompilerExtension
 
 		# Create PSR request class
 		$builder->removeDefinition('http.request');
-		$builder->addDefinition($this->prefix('request'))->setFactory(Request::class)->setType(IRequest::class);
+		$builder->addDefinition($this->prefix('request'))->setFactory(Request::class);
 
 		# Create PSR response class
 		$builder->removeDefinition('http.response');
-		$builder->addDefinition($this->prefix('response'))->setFactory(Response::class)->setType(IResponse::class);
+		$builder->addDefinition($this->prefix('response'))->setFactory(Response::class);
 
 		# Add roadrunner PSR requirements
 		$builder->addDefinition($this->prefix('worker'))
