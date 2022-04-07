@@ -230,10 +230,13 @@ class RequestFactory
 
 		$url->setScheme($uri->getScheme());
 		$url->setHost($uri->getHost());
-		$url->setPort($uri->getPort());
 		$url->setPath($uri->getPath());
-		$url->setQuery($uri->getQuery());
 
+		if ($uri->getPort()) {
+			$url->setPort($uri->getPort());
+		}
+
+		$url->setQuery($uri->getQuery());
 		$this->setAuthorization($url, $uri->getUserInfo());
 
 		return $url;

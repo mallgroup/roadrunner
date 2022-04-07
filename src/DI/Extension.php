@@ -4,15 +4,12 @@ declare(strict_types=1);
 
 namespace Mallgroup\RoadRunner\DI;
 
-use Mallgroup\RoadRunner\PsrChain;
 use Nette;
 use Nette\Http\Session;
 use Tracy;
 use Nette\Schema\Expect;
 use Nette\Schema\Schema;
 use Nyholm\Psr7\Factory\Psr17Factory;
-use Mallgroup\RoadRunner\Http\IRequest;
-use Mallgroup\RoadRunner\Http\IResponse;
 use Mallgroup\RoadRunner\Http\RequestFactory;
 use Mallgroup\RoadRunner\Http\Request;
 use Mallgroup\RoadRunner\Http\Response;
