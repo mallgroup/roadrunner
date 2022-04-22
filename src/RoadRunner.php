@@ -5,48 +5,29 @@ declare(strict_types=1);
 namespace Mallgroup\RoadRunner;
 
 use Mallgroup\RoadRunner\Http\Session;
-use Nyholm\Psr7\Response;
+use Mallgroup\RoadRunner\Middlewares\NetteApplicationMiddleware;
 use Nette\DI\Container;
 use Nette\Http\IResponse;
-use Mallgroup\RoadRunner\Http\IRequest;
+use Nyholm\Psr7\Response;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Log\LoggerInterface;
 use Spiral\RoadRunner\Http\PSR7WorkerInterface;
 use Throwable;
-use Tracy\BlueScreen;
 
 class RoadRunner
 {
-	private PsrApplication $application;
-	private Session $session;
-	private ?LoggerInterface $logger = null;
-
-	private array $servicesToFlush = ['nette.templateFactory', 'user', 'nette.userStorage'];
-
 	public function __construct(
 		private PSR7WorkerInterface $worker,
-		private Container $container,
-		private bool $showExceptions = false,
+		private PsrChain $chain,
+		private Events $events,
+		private ?LoggerInterface $logger = null,
 	) {
-		try {
-			$this->application = $this->container->getByType(PsrApplication::class);
-			$this->session = $this->container->getByType(Session::class);
-			$this->logger = $this->container->getByType(LoggerInterface::class, false);
-
-			$this->session->setup();
-			$this->application->onFlush[] = function () {
-				foreach ($this->servicesToFlush as $service) {
-					$this->container->removeService($service);
-				}
-			};
-		} catch (\Throwable) {
-			$this->worker->getWorker()->error('Failed to load application');
-			$this->worker->getWorker()->stop();
-		}
 	}
 
 	public function run(): void
 	{
+		$this->events->init();
+
 		while (true) {
 			try {
 				$request = $this->worker->waitRequest();
@@ -59,9 +40,8 @@ class RoadRunner
 			}
 
 			try {
-				$response = new Response;
 				ob_start();
-				$response = $this->application->run($request, $response);
+				$response = $this->chain->handle($request);
 				$content = ob_get_clean();
 				if ($content) {
 					$this->logger->warning(
@@ -77,56 +57,31 @@ class RoadRunner
 			} catch (Throwable $e) {
 				$this->worker->respond($this->processException($e));
 			} finally {
-				$this->application->afterResponse();
+				$this->events->flush();
 			}
 		}
+
+		$this->events->destroy();
 	}
 
 	private function processException(Throwable $e): Response
 	{
 		try {
-			$headers = ['Content-Type' => 'text/json'];
 			$this->logger?->error($e->getMessage(), [
 				'code' => $e->getCode(),
 				'file' => $e->getFile(),
 				'line' => $e->getLine(),
 				'trace' => $e->getTrace(),
 			]);
-
-			if ($this->showExceptions) {
-				/** @var BlueScreen|null $blueScreen */
-				$blueScreen = $this->container->getByType(BlueScreen::class, false);
-				/** @var IRequest|null $request */
-				$request = $this->container->getByType(IRequest::class, false);
-
-				if (!$request?->isAjax() && $blueScreen) {
-					$headers['Content-Type'] = 'text/html';
-					ob_start();
-					$blueScreen->render($e);
-					$content = ob_get_clean();
-				} else {
-					$content = json_encode([
-						'error' => $e->getMessage(),
-						'code' => $e->getCode(),
-						'trace' => $e->getTrace()
-					]);
-				}
-			} else {
-				$content = json_encode([
-					'error' => 'Internal server error'
-				]);
-			}
-		} catch (\Throwable $throwable) {
-			$content = json_encode([
-				'error' => $throwable->getMessage(),
-				'trace' => $throwable->getTrace(),
-				'previous' => [
-					'error' => $e->getMessage(),
-					'trace' => $e->getTrace(),
-				]
-			]);
+		} catch (\Throwable) {
 		}
 
-		return new Response(IResponse::S500_INTERNAL_SERVER_ERROR, $headers, $content ?: null);
+		return new Response(
+			IResponse::S500_INTERNAL_SERVER_ERROR,
+			['Content-Type' => 'text/json'],
+			json_encode([
+				'error' => 'Internal server error'
+			])
+		);
 	}
 }

@@ -35,8 +35,6 @@ class Session extends \Nette\Http\Session
 		'gc_maxlifetime' => self::DEFAULT_FILE_LIFETIME, // 3 hours
 	];
 
-	/** @deprecated */
-	protected bool $readAndClose = false;
 	protected bool $autoStart = true;
 	private SessionHandlerInterface|null $handler = null;
 	private bool $configured = false;
@@ -164,6 +162,7 @@ class Session extends \Nette\Http\Session
 
 		$this->started = false;
 		$this->regenerated = false;
+		$this->configured = false;
 	}
 
 	/**
