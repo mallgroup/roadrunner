@@ -4,31 +4,35 @@ declare(strict_types=1);
 
 namespace Mallgroup\RoadRunner\DI;
 
+use Mallgroup\RoadRunner\Events;
+use Mallgroup\RoadRunner\Http\Request;
+use Mallgroup\RoadRunner\Http\RequestFactory;
+use Mallgroup\RoadRunner\Http\Response;
+use Mallgroup\RoadRunner\Middlewares\NetteApplicationMiddleware;
+use Mallgroup\RoadRunner\PsrChain;
+use Mallgroup\RoadRunner\RoadRunner;
 use Nette;
 use Nette\Http\Session;
-use Tracy;
 use Nette\Schema\Expect;
 use Nette\Schema\Schema;
 use Nyholm\Psr7\Factory\Psr17Factory;
-use Mallgroup\RoadRunner\Http\RequestFactory;
-use Mallgroup\RoadRunner\Http\Request;
-use Mallgroup\RoadRunner\Http\Response;
-use Mallgroup\RoadRunner\PsrApplication;
-use Mallgroup\RoadRunner\RoadRunner;
 use Spiral\RoadRunner\Http\PSR7Worker;
 use Spiral\RoadRunner\WorkerInterface;
+use Tracy;
 
 /**
  * @property-read \stdClass $config
  */
 class Extension extends Nette\DI\CompilerExtension
 {
+	const RR_FLUSH = 'RR_FLUSH';
+
 	public function getConfigSchema(): Schema
 	{
 		return Expect::structure([
-			'showExceptions' => Expect::bool(false),
 			'errorPresenter' => Expect::string('Nette:Error')->dynamic(),
 			'catchExceptions' => Expect::bool(false)->dynamic(),
+			'middlewares' => Expect::list(),
 		]);
 	}
 
@@ -64,16 +68,20 @@ class Extension extends Nette\DI\CompilerExtension
 			'@' . $this->prefix('psr17factory'),
 		])->setAutowired(false);
 
+		# Events
+		$builder->addDefinition($this->prefix('events'))
+				->setFactory(Events::class);
+
 		# RoadRunner <=> PsrApplication interface
 		$builder->addDefinition($this->prefix('roadrunner'))->setFactory(RoadRunner::class, [
 			'@' . $this->prefix('psrWorker'),
-			'@container',
-			$config->showExceptions,
+			'@' . $this->prefix('chain'),
+			'@' . $this->prefix('events'),
 		]);
 
 		# Add PSRApplication
 		$builder->addDefinition($this->prefix('application'))
-				->setFactory(PsrApplication::class)
+				->setFactory(NetteApplicationMiddleware::class)
 				->addSetup('$catchExceptions', [$config->catchExceptions])
 				->addSetup('$errorPresenter', [$config->errorPresenter]);
 
@@ -82,6 +90,19 @@ class Extension extends Nette\DI\CompilerExtension
 		$sessionDefinition = $builder->getDefinitionByType(Session::class);
 		$sessionDefinition->setFactory(\Mallgroup\RoadRunner\Http\Session::class)
 			->setType(\Mallgroup\RoadRunner\Http\Session::class);
+
+		# Middlewares
+		$builder->addDefinition($this->prefix('chain'))
+			->setFactory(PsrChain::class, [
+				new Nette\PhpGenerator\Literal('new \Nyholm\Psr7\Response'),
+				...$config->middlewares,
+				'@' . $this->prefix('application'),
+			]);
+
+		# Setup tags
+		foreach (['nette.templateFactory', 'user', 'nette.userStorage'] as $service) {
+			$serviceDefinition = $builder->getDefinition($service)->addTag(self::RR_FLUSH);
+		}
 	}
 
 	public function beforeCompile()
@@ -94,6 +115,9 @@ class Extension extends Nette\DI\CompilerExtension
 			$serviceDefinition = $builder->getDefinition($this->prefix('application'));
 			$serviceDefinition->addSetup([self::class, 'initializeBlueScreenPanel']);
 		}
+
+		# Bind events by tags
+		$this->prepareEvents($builder);
 	}
 
 	/** @internal */
@@ -101,7 +125,7 @@ class Extension extends Nette\DI\CompilerExtension
 		Tracy\BlueScreen $blueScreen,
 		Nette\Http\IRequest $httpRequest,
 		Nette\Http\IResponse $httpResponse,
-		PsrApplication $application,
+		NetteApplicationMiddleware $application,
 	): void {
 		$blueScreen->addPanel(function (?\Throwable $e) use ($application, $blueScreen, $httpResponse, $httpRequest): ?array {
 			/** @psalm-suppress InternalMethod */
@@ -114,6 +138,20 @@ class Extension extends Nette\DI\CompilerExtension
 					. '<h3>Http/Response</h3>' . $dumper($httpResponse),
 			];
 		});
+	}
+
+	private function prepareEvents(Nette\DI\ContainerBuilder $builder)
+	{
+		/** @var Nette\DI\Definitions\ServiceDefinition $events */
+		$events = $builder->getDefinition($this->prefix('events'));
+		$events->addSetup('addOnFlush', [
+				new Nette\PhpGenerator\Literal(
+					'function () { array_map(fn ($s) => $this->removeService($s), ?); }',
+					[
+						array_keys($builder->findByTag(self::RR_FLUSH))
+					]
+				)
+			]);
 	}
 
 	/** Nette\Http\Helpers::initCookie(self::$defaultHttpRequest, new Nette\Http\Response);  */

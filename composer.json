@@ -24,7 +24,8 @@
 		"nette/http": "^3.0",
 		"nette/schema": "^1.2",
 		"spiral/roadrunner-http": "^2.0",
-		"nyholm/psr7": "^1.4"
+		"nyholm/psr7": "^1.4",
+		"psr/http-server-middleware": "^1.0"
 	},
 	"require-dev": {
 		"nette/bootstrap": "^3.0",
