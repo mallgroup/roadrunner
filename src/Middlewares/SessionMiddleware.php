@@ -1,19 +1,21 @@
 <?php
 
-namespace Mallgroup\RoadRunner\Http;
+namespace Mallgroup\RoadRunner\Middlewares;
 
-use Nette;
+use Mallgroup\RoadRunner\Http\Request;
+use Mallgroup\RoadRunner\Http\Response;
 use Nette\Http\IResponse;
+use Nette\Http\Session;
 use Nette\Http\SessionSection;
 use Nette\Utils\DateTime;
 use Nette\Utils\Helpers;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\MiddlewareInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 use SessionHandlerInterface;
 
-/**
- * @method onBeforeWrite(Session $session)
- * @method onStart(Session $session)
- */
-class Session extends \Nette\Http\Session
+class SessionMiddleware extends Session implements MiddlewareInterface
 {
 	protected const DEFAULT_FILE_LIFETIME = 3 * DateTime::HOUR;
 	protected const SECURITY_OPTIONS = [
@@ -49,23 +51,22 @@ class Session extends \Nette\Http\Session
 		$this->options['cookie_secure'] = &$this->response->cookieSecure;
 	}
 
-	/**
-	 * Setup session variables, so nette does not need to do this again
-	 * @return void
-	 */
+	public function process(
+		ServerRequestInterface $request,
+		RequestHandlerInterface $handler
+	): ResponseInterface {
+		return $handler->handle($request);
+	}
+
 	public function setup(): void
 	{
-		if ($this->configured) {
-			return;
-		}
-
 		if (session_status() === PHP_SESSION_ACTIVE) {
 			$this->configure(self::SECURITY_OPTIONS);
-			$this->configured = true;
 		} else {
 			$this->configure(self::SECURITY_OPTIONS + $this->options);
 		}
 	}
+
 
 	/**
 	 * Configures session environment.
@@ -140,7 +141,7 @@ class Session extends \Nette\Http\Session
 	 */
 	public function getName(): string
 	{
-		return (string) ($this->options['name'] ?? session_name());
+		return (string)($this->options['name'] ?? session_name());
 	}
 
 	/**
@@ -148,7 +149,7 @@ class Session extends \Nette\Http\Session
 	 */
 	public function getId(): string
 	{
-		return (string) session_id();
+		return (string)session_id();
 	}
 
 	/**
@@ -157,7 +158,7 @@ class Session extends \Nette\Http\Session
 	public function close(): void
 	{
 		if (session_status() === PHP_SESSION_ACTIVE) {
-			if ($this->request->getCookie((string) session_name()) !== session_id()) {
+			if ($this->request->getCookie((string)session_name()) !== session_id()) {
 				$this->sendCookie();
 			}
 			$this->clean();
@@ -209,7 +210,7 @@ class Session extends \Nette\Http\Session
 				'cookie_lifetime' => 0,
 			]);
 		} else {
-			$time = (int) DateTime::from($time)->format('U') - time();
+			$time = (int)DateTime::from($time)->format('U') - time();
 			return $this->setOptions([
 				'gc_maxlifetime' => $time,
 				'cookie_lifetime' => $time,
@@ -235,7 +236,7 @@ class Session extends \Nette\Http\Session
 	public function setOptions(array $options): static
 	{
 		$normalized = [];
-		$allowed = (array) ini_get_all('session', false)
+		$allowed = (array)ini_get_all('session', false)
 			+ ['session.read_and_close' => 0, 'session.cookie_samesite' => 1];
 
 		foreach ($options as $key => $value) {
@@ -257,7 +258,7 @@ class Session extends \Nette\Http\Session
 			$normalized[$normKey] = $value;
 		}
 
-		$this->autoStart = (bool) ($normalized['auto_start'] ?? true);
+		$this->autoStart = (bool)($normalized['auto_start'] ?? true);
 		unset($normalized['auto_start']);
 
 		if (session_status() === PHP_SESSION_ACTIVE) {
@@ -371,7 +372,7 @@ class Session extends \Nette\Http\Session
 		}
 
 		if (!$this->started) { // session is started for first time
-			$id = $this->request->getCookie((string) session_name());
+			$id = $this->request->getCookie((string)session_name());
 			/** @var string $id */
 			$id = is_string($id) && preg_match('#^[0-9a-zA-Z,-]{22,256}$#Di', $id)
 				? $id
@@ -396,7 +397,7 @@ class Session extends \Nette\Http\Session
 			throw $e;
 		}
 
-		if ($mustExists && $this->request->getCookie((string) session_name()) !== session_id()) {
+		if ($mustExists && $this->request->getCookie((string)session_name()) !== session_id()) {
 			// PHP regenerated the ID which means that the session did not exist and cookie was invalid
 			$this->destroy();
 			return;
@@ -424,7 +425,7 @@ class Session extends \Nette\Http\Session
 		// regenerate empty session
 		if (empty($nf['Time'])) {
 			$nf['Time'] = time();
-			if ($this->request->getCookie((string) session_name()) === session_id()) {
+			if ($this->request->getCookie((string)session_name()) === session_id()) {
 				// ensures that the session was created with use_strict_mode (ie by Nette)
 				$this->regenerateId();
 			}
@@ -478,7 +479,7 @@ class Session extends \Nette\Http\Session
 		$this->started = false;
 		$this->regenerated = false;
 		$params = session_get_cookie_params();
-		$this->response->deleteCookie((string) session_name(), $params['path'], $params['domain'], $params['secure']);
+		$this->response->deleteCookie((string)session_name(), $params['path'], $params['domain'], $params['secure']);
 	}
 
 	/**
@@ -500,5 +501,43 @@ class Session extends \Nette\Http\Session
 	public function start(): void
 	{
 		$this->doStart();
+	}
+
+	private static function writeSessionCookie(
+		ResponseInterface $response,
+		string $name,
+		string $id,
+		int $now,
+		array $params
+	): ResponseInterface {
+		$cookie = urlencode($name) . '=' . urlencode($id);
+
+		// if omitted, the cookie will expire at end of the session (ie when the browser closes)
+		if (!empty($params['lifetime'])) {
+			$expires = gmdate('D, d M Y H:i:s T', $now + $params['lifetime']);
+			$cookie .= "; Expires={$expires}; Max-Age={$params['lifetime']}";
+		}
+
+		if (!empty($params['domain'])) {
+			$cookie .= "; Domain={$params['domain']}";
+		}
+
+		if (!empty($params['path'])) {
+			$cookie .= "; Path={$params['path']}";
+		}
+
+		if (!empty($params['samesite']) && in_array($params['samesite'], ['None', 'Lax', 'Strict'])) {
+			$cookie .= '; SameSite=' . $params['samesite'];
+		}
+
+		if (!empty($params['secure'])) {
+			$cookie .= '; Secure';
+		}
+
+		if (!empty($params['httponly'])) {
+			$cookie .= '; HttpOnly';
+		}
+
+		return $response->withAddedHeader('Set-Cookie', $cookie);
 	}
 }

@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Mallgroup\RoadRunner;
+namespace Mallgroup\RoadRunner\Middlewares;
 
+use Mallgroup\RoadRunner\Events;
+use Mallgroup\RoadRunner\Http\IRequest;
+use Mallgroup\RoadRunner\Http\IResponse;
 use Mallgroup\RoadRunner\Http\Session;
 use Nette;
 use Nette\Application\AbortException;
@@ -18,14 +21,14 @@ use Nette\Application\UI;
 use Nette\Http\Helpers;
 use Nette\Routing\Router;
 use Nette\Utils\Arrays;
-use Mallgroup\RoadRunner\Http\IRequest;
-use Mallgroup\RoadRunner\Http\IResponse;
 use Nyholm\Psr7\Stream;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\MiddlewareInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 use Throwable;
 
-class PsrApplication
+class NetteApplicationMiddleware implements MiddlewareInterface
 {
 	use Nette\SmartObject;
 
@@ -65,16 +68,9 @@ class PsrApplication
 		private Router $router,
 		private IRequest $httpRequest,
 		private IResponse $httpResponse,
-		private Session $session,
+		private Events $events,
 	) {
-		$this->onResponse[] = function () {
-			$this->session->sendCookie();
-			$this->session->close();
-
-			if (!$this->httpRequest->getCookie(Helpers::STRICT_COOKIE_NAME)) {
-				Helpers::initCookie($this->httpRequest, $this->httpResponse);
-			}
-		};
+		$this->events->addOnFlush(fn() => Arrays::invoke($this->onFlush, $this));
 	}
 
 	/**
@@ -83,8 +79,10 @@ class PsrApplication
 	 * @throws BadRequestException
 	 * @throws ApplicationException
 	 */
-	public function run(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+	public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
 	{
+		$response = $handler->handle($request);
+
 		try {
 			$this->initialize($request);
 			Arrays::invoke($this->onStartup, $this);
@@ -107,14 +105,8 @@ class PsrApplication
 			Arrays::invoke($this->onShutdown, $this, $e);
 			throw $e;
 		} finally {
-			$this->session->close();
 			$this->httpResponse->setSent(true);
 		}
-	}
-
-	public function afterResponse(): void
-	{
-		Arrays::invoke($this->onFlush, $this);
 	}
 
 	protected function initialize(ServerRequestInterface $request): void
