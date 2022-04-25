@@ -68,18 +68,8 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 		private Router $router,
 		private IRequest $httpRequest,
 		private IResponse $httpResponse,
-		private Session $session,
 		private Events $events,
 	) {
-		$this->onResponse[] = function () {
-			$this->session->sendCookie();
-			$this->session->close();
-
-			if (!$this->httpRequest->getCookie(Helpers::STRICT_COOKIE_NAME)) {
-				Helpers::initCookie($this->httpRequest, $this->httpResponse);
-			}
-		};
-
 		$this->events->addOnFlush(fn() => Arrays::invoke($this->onFlush, $this));
 	}
 
@@ -115,7 +105,6 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 			Arrays::invoke($this->onShutdown, $this, $e);
 			throw $e;
 		} finally {
-			$this->session->close();
 			$this->httpResponse->setSent(true);
 		}
 	}

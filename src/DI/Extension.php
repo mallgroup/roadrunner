@@ -12,6 +12,8 @@ use Mallgroup\RoadRunner\Middlewares\NetteApplicationMiddleware;
 use Mallgroup\RoadRunner\PsrChain;
 use Mallgroup\RoadRunner\RoadRunner;
 use Nette;
+use Nette\DI\ContainerBuilder;
+use Nette\DI\Definitions\ServiceDefinition;
 use Nette\Http\Session;
 use Nette\Schema\Expect;
 use Nette\Schema\Schema;
@@ -26,6 +28,7 @@ use Tracy;
 class Extension extends Nette\DI\CompilerExtension
 {
 	const RR_FLUSH = 'RR_FLUSH';
+	const RR_FLUSHABLE_SERVICES = ['nette.templateFactory', 'user', 'nette.userStorage'];
 
 	public function getConfigSchema(): Schema
 	{
@@ -39,8 +42,106 @@ class Extension extends Nette\DI\CompilerExtension
 	public function loadConfiguration()
 	{
 		$builder = $this->getContainerBuilder();
-		$config = $this->config;
 
+		# Setup events
+		$this->createEventsDefinition($builder);
+
+		# replace RequestFactory, Request, Response, Session
+		$this->replaceNetteHttpStuff($builder);
+		$this->replaceNetteSession($builder);
+
+		# Create PSR workers
+		$this->createPsrStuff($builder);
+
+		# NetteApplication middleware, this one is added by default
+		$this->createApplication($builder);
+
+		# Roadrunner <=> Nette bridge
+		$this->createRoadRunner($builder);
+
+		# Middlewares
+		$this->createMiddlewareChain($builder);
+
+		$this->setupTagsEvents($builder);
+	}
+
+	public function beforeCompile()
+	{
+		$builder = $this->getContainerBuilder();
+
+		# Setup blueScreen if possible
+		if ($builder->getByType(Tracy\BlueScreen::class)) {
+			/** @var ServiceDefinition $serviceDefinition */
+			$serviceDefinition = $builder->getDefinition($this->prefix('application'));
+			$serviceDefinition->addSetup([self::class, 'initializeBlueScreenPanel']);
+		}
+
+		# Bind events by tags
+		/** @var ServiceDefinition $events */
+		$events = $builder->getDefinition($this->prefix('events'));
+		$events->addSetup('addOnFlush', [
+			new Nette\PhpGenerator\Literal(
+				'function () { array_map(fn ($s) => $this->removeService($s), ?); }',
+				[
+					array_keys($builder->findByTag(self::RR_FLUSH))
+				]
+			)
+		]);
+	}
+
+	public function afterCompile(Nette\PhpGenerator\ClassType $class)
+	{
+		$builder = $this->getContainerBuilder();
+		$initialize = new Nette\PhpGenerator\Closure;
+
+		# Initialize session setup
+		$initialize->addBody((string) (new Nette\PhpGenerator\Literal(
+			'$this->getService(?)->setup();',
+			[$builder->getDefinitionByType(Session::class)->getName()],
+		)));
+
+		# add initialize to container
+		$class->getMethod('initialize')->addBody("// roadrunner\n($initialize)();");
+	}
+
+	/** @internal */
+	public static function initializeBlueScreenPanel(
+		Tracy\BlueScreen $blueScreen,
+		Nette\Http\IRequest $httpRequest,
+		Nette\Http\IResponse $httpResponse,
+		NetteApplicationMiddleware $application,
+	): void {
+		$blueScreen->addPanel(
+			function (?\Throwable $e) use ($application, $blueScreen, $httpResponse, $httpRequest): ?array {
+				/** @psalm-suppress InternalMethod */
+				$dumper = $blueScreen->getDumper();
+				return $e ? null : [
+					'tab' => 'Psr Application',
+					'panel' => '<h3>Requests</h3>' . $dumper($application->getRequests())
+						. '<h3>Presenter</h3>' . $dumper($application->getPresenter())
+						. '<h3>Http/Request</h3>' . $dumper($httpRequest)
+						. '<h3>Http/Response</h3>' . $dumper($httpResponse),
+				];
+			}
+		);
+	}
+
+	private function setupTagsEvents(ContainerBuilder $builder)
+	{
+		foreach (self::RR_FLUSHABLE_SERVICES as $service) {
+			$builder->getDefinition($service)->addTag(self::RR_FLUSH);
+		}
+	}
+
+	protected function createEventsDefinition(ContainerBuilder $builder): ServiceDefinition
+	{
+		return $this->createServiceDefinition($builder, 'events')
+					->setFactory(Events::class);
+	}
+
+	protected function replaceNetteHttpStuff(ContainerBuilder $builder)
+	{
+		# Replace requestFactory
 		$builder->removeDefinition('http.requestFactory');
 		$builder->addDefinition($this->prefix('requestFactory'))->setFactory(RequestFactory::class);
 		$builder->addAlias('http.requestFactory', $this->prefix('requestFactory'));
@@ -52,107 +153,80 @@ class Extension extends Nette\DI\CompilerExtension
 		# Create PSR response class
 		$builder->removeDefinition('http.response');
 		$builder->addDefinition($this->prefix('response'))->setFactory(Response::class);
+	}
 
-		# Add roadrunner PSR requirements
-		$builder->addDefinition($this->prefix('worker'))
-				->setFactory('Spiral\RoadRunner\Worker::create')
-				->setType(WorkerInterface::class)
-				->setAutowired(false);
-		$builder->addDefinition($this->prefix('psr17factory'))
-				->setFactory(Psr17Factory::class)
-				->setAutowired(false);
-		$builder->addDefinition($this->prefix('psrWorker'))->setFactory(PSR7Worker::class, [
-			'@' . $this->prefix('worker'),
-			'@' . $this->prefix('psr17factory'),
-			'@' . $this->prefix('psr17factory'),
-			'@' . $this->prefix('psr17factory'),
-		])->setAutowired(false);
+	protected function createPsrStuff(ContainerBuilder $builder)
+	{
+		$this->createServiceDefinition($builder, 'worker')
+			 ->setFactory('Spiral\RoadRunner\Worker::create')
+			 ->setType(WorkerInterface::class)
+			 ->setAutowired(false);
 
-		# Events
-		$builder->addDefinition($this->prefix('events'))
-				->setFactory(Events::class);
+		$this->createServiceDefinition($builder, 'psr17factory')
+			 ->setFactory(Psr17Factory::class)
+			 ->setAutowired(false);
 
-		# RoadRunner <=> PsrApplication interface
-		$builder->addDefinition($this->prefix('roadrunner'))->setFactory(RoadRunner::class, [
-			'@' . $this->prefix('psrWorker'),
-			'@' . $this->prefix('chain'),
-			'@' . $this->prefix('events'),
-		]);
+		$this->createServiceDefinition($builder, 'psrWorker')
+			 ->setFactory(
+				 PSR7Worker::class,
+				 [
+					 '@' . $this->prefix('worker'),
+					 '@' . $this->prefix('psr17factory'),
+					 '@' . $this->prefix('psr17factory'),
+					 '@' . $this->prefix('psr17factory'),
+				 ]
+			 )
+			 ->setAutowired(false);
+	}
 
-		# Add PSRApplication
-		$builder->addDefinition($this->prefix('application'))
-				->setFactory(NetteApplicationMiddleware::class)
-				->addSetup('$catchExceptions', [$config->catchExceptions])
-				->addSetup('$errorPresenter', [$config->errorPresenter]);
+	private function createServiceDefinition(ContainerBuilder $builder, string $name): ServiceDefinition
+	{
+		return $builder->addDefinition($this->prefix($name));
+	}
 
-		# Session should be ours, to support RR
-		/** @var Nette\DI\Definitions\ServiceDefinition $sessionDefinition */
+	protected function createApplication(ContainerBuilder $builder)
+	{
+		$this->createServiceDefinition($builder, 'application')
+			 ->setFactory(NetteApplicationMiddleware::class)
+			 ->addSetup('$catchExceptions', [$this->config->catchExceptions])
+			 ->addSetup('$errorPresenter', [$this->config->errorPresenter])
+			->addSetup('$onResponse[] = ?', [
+				(string) (new Nette\PhpGenerator\Literal(
+					'function() { Nette\Http\Helpers::initCookie($this->getService(?), $this->getService(?));};',
+					[$this->prefix('response'), $this->prefix('request')]
+				))
+			]);
+	}
+
+	protected function createRoadRunner(ContainerBuilder $builder)
+	{
+		$this->createServiceDefinition($builder, 'roadrunner')
+			 ->setFactory(
+				 RoadRunner::class,
+				 [
+					 '@' . $this->prefix('psrWorker'),
+					 '@' . $this->prefix('chain'),
+					 '@' . $this->prefix('events'),
+				 ]
+			 );
+	}
+
+	protected function replaceNetteSession(ContainerBuilder $builder)
+	{
+		/** @var ServiceDefinition $sessionDefinition */
 		$sessionDefinition = $builder->getDefinitionByType(Session::class);
 		$sessionDefinition->setFactory(\Mallgroup\RoadRunner\Http\Session::class)
-			->setType(\Mallgroup\RoadRunner\Http\Session::class);
-
-		# Middlewares
-		$builder->addDefinition($this->prefix('chain'))
-			->setFactory(PsrChain::class, [
-				new Nette\PhpGenerator\Literal('new \Nyholm\Psr7\Response'),
-				...$config->middlewares,
-				'@' . $this->prefix('application'),
-			]);
-
-		# Setup tags
-		foreach (['nette.templateFactory', 'user', 'nette.userStorage'] as $service) {
-			$serviceDefinition = $builder->getDefinition($service)->addTag(self::RR_FLUSH);
-		}
+						  ->setType(\Mallgroup\RoadRunner\Http\Session::class);
 	}
 
-	public function beforeCompile()
+	protected function createMiddlewareChain(ContainerBuilder $builder)
 	{
-		$builder = $this->getContainerBuilder();
-
-		# Setup blueScreen if possible
-		if ($builder->getByType(Tracy\BlueScreen::class)) {
-			/** @var Nette\DI\Definitions\ServiceDefinition $serviceDefinition */
-			$serviceDefinition = $builder->getDefinition($this->prefix('application'));
-			$serviceDefinition->addSetup([self::class, 'initializeBlueScreenPanel']);
-		}
-
-		# Bind events by tags
-		$this->prepareEvents($builder);
+		$this->createServiceDefinition($builder, 'chain')
+			 ->setFactory(PsrChain::class, [
+				 new Nette\PhpGenerator\Literal('new \Nyholm\Psr7\Response'),
+				 ...$this->config->middlewares,
+				 '@session.session',
+				 '@' . $this->prefix('application'),
+			 ]);
 	}
-
-	/** @internal */
-	public static function initializeBlueScreenPanel(
-		Tracy\BlueScreen $blueScreen,
-		Nette\Http\IRequest $httpRequest,
-		Nette\Http\IResponse $httpResponse,
-		NetteApplicationMiddleware $application,
-	): void {
-		$blueScreen->addPanel(function (?\Throwable $e) use ($application, $blueScreen, $httpResponse, $httpRequest): ?array {
-			/** @psalm-suppress InternalMethod */
-			$dumper = $blueScreen->getDumper();
-			return $e ? null : [
-				'tab' => 'Psr Application',
-				'panel' => '<h3>Requests</h3>' . $dumper($application->getRequests())
-					. '<h3>Presenter</h3>' . $dumper($application->getPresenter())
-					. '<h3>Http/Request</h3>' . $dumper($httpRequest)
-					. '<h3>Http/Response</h3>' . $dumper($httpResponse),
-			];
-		});
-	}
-
-	private function prepareEvents(Nette\DI\ContainerBuilder $builder)
-	{
-		/** @var Nette\DI\Definitions\ServiceDefinition $events */
-		$events = $builder->getDefinition($this->prefix('events'));
-		$events->addSetup('addOnFlush', [
-				new Nette\PhpGenerator\Literal(
-					'function () { array_map(fn ($s) => $this->removeService($s), ?); }',
-					[
-						array_keys($builder->findByTag(self::RR_FLUSH))
-					]
-				)
-			]);
-	}
-
-	/** Nette\Http\Helpers::initCookie(self::$defaultHttpRequest, new Nette\Http\Response);  */
 }
