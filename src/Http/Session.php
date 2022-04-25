@@ -41,7 +41,7 @@ class Session extends \Nette\Http\Session
 
 	public function __construct(
 		protected Request $request,
-		protected Response $response
+		protected Response $response,
 	) {
 		parent::__construct($this->request, $this->response);
 		$this->options['cookie_path'] = &$this->response->cookiePath;
@@ -118,6 +118,10 @@ class Session extends \Nette\Http\Session
 	 */
 	public function sendCookie(): void
 	{
+		if (!$this->getId()) {
+			return;
+		}
+
 		$cookie = session_get_cookie_params();
 		$this->response->setCookie(
 			$this->getName(),
@@ -456,6 +460,7 @@ class Session extends \Nette\Http\Session
 			session_id(session_create_id() ?: null);
 		}
 		$this->regenerated = true;
+		$this->sendCookie();
 	}
 
 	/**

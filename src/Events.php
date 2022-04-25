@@ -5,30 +5,30 @@ namespace Mallgroup\RoadRunner;
 use Nette\Utils\Arrays;
 
 /**
- * @method flush(): array
- * @method init(): array
- * @method destroy(): array
- * @method addOnFlush(callable $cb, string $name = null): string
- * @method addOnInit(callable $cb, string $name = null): string
- * @method addOnDestroy(callable $cb, string $name = null): string
+ * @method array flush()
+ * @method array start()
+ * @method array stop()
+ * @method string addOnFlush(callable $cb, string|null $name = null)
+ * @method string addOnStart(callable $cb, string|null $name = null)
+ * @method string addOnStop(callable $cb, string|null $name = null)
  */
 class Events
 {
 	protected const SERVICE = 'service';
 
 	protected array $callbacks = [
-		'init' => [],
-		'destroy' => [],
+		'start' => [],
+		'stop' => [],
 		'flush' => [],
 	];
 
 	public function __call(string $name, array $arguments)
 	{
 		return match ($name) {
-			'flush', 'init', 'destroy' => $this->invoke($name),
+			'flush', 'start', 'stop' => $this->invoke($name),
 			'addOnFlush' => $this->addEvent('flush', ...$arguments),
-			'addOnInit' => $this->addEvent('init', ...$arguments),
-			'addOnDestroy' => $this->addEvent('destroy', ...$arguments),
+			'addOnStart' => $this->addEvent('start', ...$arguments),
+			'addOnStop' => $this->addEvent('stop', ...$arguments),
 			default => throw new \InvalidArgumentException("Method {$name} not found."),
 		};
 	}

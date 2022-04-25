@@ -26,7 +26,7 @@ class RoadRunner
 
 	public function run(): void
 	{
-		$this->events->init();
+		$this->events->start();
 
 		while (true) {
 			try {
@@ -61,7 +61,7 @@ class RoadRunner
 			}
 		}
 
-		$this->events->destroy();
+		$this->events->stop();
 	}
 
 	private function processException(Throwable $e): Response
