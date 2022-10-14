@@ -23,7 +23,7 @@ final class PsrChain implements RequestHandlerInterface
 			$this->response,
 			...array_filter(
 				$this->middlewares,
-				function ($m) use ($middleware) {
+				static function ($m) use ($middleware) {
 					return $middleware !== $m;
 				}
 			)
