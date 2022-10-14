@@ -35,25 +35,25 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 	public ?string $errorPresenter = null;
 
 	/** @var array<callable(self): void>  Occurs before the application loads presenter */
-	public array $onStartup = [];
+	public $onStartup = [];
 
 	/** @var array<callable(self, ?Throwable): void>  Occurs before the application shuts down */
-	public array $onShutdown = [];
+	public $onShutdown = [];
 
 	/** @var array<callable(self, IRequest): void>  Occurs when a new request is received */
-	public array $onRequest = [];
+	public $onRequest = [];
 
 	/** @var array<callable(self, IPresenter): void>  Occurs when a presenter is created */
-	public array $onPresenter = [];
+	public $onPresenter = [];
 
 	/** @var array<callable(self, IResponse): void>  Occurs when a new response is ready for dispatch */
-	public array $onResponse = [];
+	public $onResponse = [];
 
 	/** @var array<callable(self, IResponse): void>  Occurs after response is sent to client */
-	public array $onFlush = [];
+	public $onFlush = [];
 
 	/** @var array<callable(self, Throwable): void>  Occurs when an unhandled exception occurs in the application */
-	public array $onError = [];
+	public $onError = [];
 
 
 	/** @var Request[] */
