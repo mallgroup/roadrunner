@@ -68,7 +68,9 @@ class PsrApplication
 		private Session $session,
 	) {
 		$this->onResponse[] = function () {
-			$this->session->sendCookie();
+			if($this->session->isStarted()){
+				$this->session->sendCookie();
+			}
 			$this->session->close();
 
 			if (!$this->httpRequest->getCookie(Helpers::STRICT_COOKIE_NAME)) {
