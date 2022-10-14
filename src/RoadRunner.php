@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Mallgroup\RoadRunner;
 
-use Mallgroup\RoadRunner\Http\Session;
-use Mallgroup\RoadRunner\Middlewares\NetteApplicationMiddleware;
-use Nette\DI\Container;
 use Nette\Http\IResponse;
 use Nyholm\Psr7\Response;
 use Psr\Http\Message\ServerRequestInterface;
@@ -79,9 +76,7 @@ class RoadRunner
 		return new Response(
 			IResponse::S500_INTERNAL_SERVER_ERROR,
 			['Content-Type' => 'text/json'],
-			json_encode([
-				'error' => 'Internal server error'
-			])
+			'{"error":"Internal server error"}'
 		);
 	}
 }

@@ -22,7 +22,6 @@ class TryCatchMiddleware implements MiddlewareInterface
 		ServerRequestInterface $request,
 		RequestHandlerInterface $handler,
 	): ResponseInterface {
-		fwrite(STDERR, "trycatch\n");
 		try {
 			return $handler->handle($request);
 		} catch (\Throwable $e) {

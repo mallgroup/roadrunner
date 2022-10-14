@@ -27,8 +27,8 @@ use Tracy;
  */
 class Extension extends Nette\DI\CompilerExtension
 {
-	const RR_FLUSH = 'RR_FLUSH';
-	const RR_FLUSHABLE_SERVICES = ['nette.templateFactory', 'user', 'nette.userStorage'];
+	public const RR_FLUSH = 'RR_FLUSH';
+	private const RR_FLUSHABLE_SERVICES = ['nette.templateFactory', 'user', 'nette.userStorage'];
 
 	public function getConfigSchema(): Schema
 	{
@@ -39,7 +39,7 @@ class Extension extends Nette\DI\CompilerExtension
 		]);
 	}
 
-	public function loadConfiguration()
+	public function loadConfiguration(): void
 	{
 		$builder = $this->getContainerBuilder();
 
@@ -91,14 +91,7 @@ class Extension extends Nette\DI\CompilerExtension
 
 	public function afterCompile(Nette\PhpGenerator\ClassType $class)
 	{
-		$builder = $this->getContainerBuilder();
 		$initialize = new Nette\PhpGenerator\Closure;
-
-		# Initialize session setup
-		$initialize->addBody((string) (new Nette\PhpGenerator\Literal(
-			'$this->getService(?)->setup();',
-			[$builder->getDefinitionByType(Session::class)->getName()],
-		)));
 
 		# add initialize to container
 		$class->getMethod('initialize')->addBody("// roadrunner\n($initialize)();");
@@ -225,7 +218,6 @@ class Extension extends Nette\DI\CompilerExtension
 			 ->setFactory(PsrChain::class, [
 				 new Nette\PhpGenerator\Literal('new \Nyholm\Psr7\Response'),
 				 ...$this->config->middlewares,
-				 '@session.session',
 				 '@' . $this->prefix('application'),
 			 ]);
 	}

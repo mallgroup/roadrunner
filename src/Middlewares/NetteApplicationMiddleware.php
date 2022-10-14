@@ -37,25 +37,25 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 	public ?string $errorPresenter = null;
 
 	/** @var array<callable(self): void>  Occurs before the application loads presenter */
-	public $onStartup = [];
+	public array $onStartup = [];
 
 	/** @var array<callable(self, ?Throwable): void>  Occurs before the application shuts down */
-	public $onShutdown = [];
+	public array $onShutdown = [];
 
 	/** @var array<callable(self, IRequest): void>  Occurs when a new request is received */
-	public $onRequest = [];
+	public array $onRequest = [];
 
 	/** @var array<callable(self, IPresenter): void>  Occurs when a presenter is created */
-	public $onPresenter = [];
+	public array $onPresenter = [];
 
 	/** @var array<callable(self, IResponse): void>  Occurs when a new response is ready for dispatch */
-	public $onResponse = [];
+	public array $onResponse = [];
 
 	/** @var array<callable(self, IResponse): void>  Occurs after response is sent to client */
-	public $onFlush = [];
+	public array $onFlush = [];
 
 	/** @var array<callable(self, Throwable): void>  Occurs when an unhandled exception occurs in the application */
-	public $onError = [];
+	public array $onError = [];
 
 
 	/** @var Request[] */
@@ -128,9 +128,13 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 
 		if ($params === null) {
 			throw new BadRequestException('No route for HTTP request.');
-		} elseif (!is_string($presenter)) {
+		}
+
+		if (!is_string($presenter)) {
 			throw new Nette\InvalidStateException('Missing presenter in route definition.');
-		} elseif (Nette\Utils\Strings::startsWith($presenter, 'Nette:') && $presenter !== 'Nette:Micro') {
+		}
+
+		if (Nette\Utils\Strings::startsWith($presenter, 'Nette:') && $presenter !== 'Nette:Micro') {
 			throw new BadRequestException('Invalid request. Presenter is not achievable.');
 		}
 
