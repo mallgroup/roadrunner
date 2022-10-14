@@ -7,7 +7,6 @@ namespace Mallgroup\RoadRunner\Middlewares;
 use Mallgroup\RoadRunner\Events;
 use Mallgroup\RoadRunner\Http\IRequest;
 use Mallgroup\RoadRunner\Http\IResponse;
-use Mallgroup\RoadRunner\Http\Session;
 use Nette;
 use Nette\Application\AbortException;
 use Nette\Application\ApplicationException;
@@ -18,7 +17,6 @@ use Nette\Application\IPresenterFactory;
 use Nette\Application\Request;
 use Nette\Application\Responses;
 use Nette\Application\UI;
-use Nette\Http\Helpers;
 use Nette\Routing\Router;
 use Nette\Utils\Arrays;
 use Nyholm\Psr7\Stream;
@@ -188,7 +186,7 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 		Arrays::invoke($this->onResponse, $this, $response);
 		ob_start();
 		$response->send($this->httpRequest, $this->httpResponse);
-		return (string) ob_get_clean();
+		return (string)ob_get_clean();
 	}
 
 	/**
@@ -209,7 +207,7 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 				return $this->processRequest($this->presenter->getLastCreatedRequest());
 			}
 		} else {
-			return $this->processRequest(new Request((string) $this->errorPresenter, Request::FORWARD, $args));
+			return $this->processRequest(new Request((string)$this->errorPresenter, Request::FORWARD, $args));
 		}
 	}
 
