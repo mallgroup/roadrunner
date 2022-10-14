@@ -14,7 +14,6 @@ use Mallgroup\RoadRunner\RoadRunner;
 use Nette;
 use Nette\DI\ContainerBuilder;
 use Nette\DI\Definitions\ServiceDefinition;
-use Nette\Http\Session;
 use Nette\Schema\Expect;
 use Nette\Schema\Schema;
 use Nyholm\Psr7\Factory\Psr17Factory;
@@ -46,9 +45,8 @@ class Extension extends Nette\DI\CompilerExtension
 		# Setup events
 		$this->createEventsDefinition($builder);
 
-		# replace RequestFactory, Request, Response, Session
+		# replace RequestFactory, Request, Response
 		$this->replaceNetteHttpStuff($builder);
-		$this->replaceNetteSession($builder);
 
 		# Create PSR workers
 		$this->createPsrStuff($builder);
@@ -202,14 +200,6 @@ class Extension extends Nette\DI\CompilerExtension
 					 '@' . $this->prefix('events'),
 				 ]
 			 );
-	}
-
-	protected function replaceNetteSession(ContainerBuilder $builder)
-	{
-		/** @var ServiceDefinition $sessionDefinition */
-		$sessionDefinition = $builder->getDefinitionByType(Session::class);
-		$sessionDefinition->setFactory(\Mallgroup\RoadRunner\Http\Session::class)
-						  ->setType(\Mallgroup\RoadRunner\Http\Session::class);
 	}
 
 	protected function createMiddlewareChain(ContainerBuilder $builder)
