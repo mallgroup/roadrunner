@@ -2,6 +2,7 @@
 
 namespace Mallgroup\RoadRunner\Middlewares;
 
+use JsonException;
 use Nette\Http\IResponse;
 use Nyholm\Psr7\Response;
 use Psr\Http\Message\ResponseInterface;
@@ -28,7 +29,6 @@ class TryCatchMiddleware implements MiddlewareInterface
 			if ($this->debugMode) {
 				return $this->processExceptionError($e, $request);
 			}
-
 			return $this->internalServerError();
 		}
 	}
@@ -37,9 +37,7 @@ class TryCatchMiddleware implements MiddlewareInterface
 	{
 		return $this->generateResponse(
 			['Content-Type' => 'text/json'],
-			json_encode([
-				'error' => 'Internal server error'
-			]),
+			'{"error":"Internal server error"}',
 		);
 	}
 
@@ -52,11 +50,15 @@ class TryCatchMiddleware implements MiddlewareInterface
 			$this->blueScreen->render($e);
 			$content = ob_get_clean();
 		} else {
-			$content = json_encode([
-				'error' => $e->getMessage(),
-				'code' => $e->getCode(),
-				'trace' => $e->getTrace()
-			]);
+			try {
+				$content = json_encode([
+					'error' => $e->getMessage(),
+					'code' => $e->getCode(),
+					'trace' => $e->getTrace()
+				], JSON_THROW_ON_ERROR);
+			} catch (JsonException) {
+				$content = $e::class . ':' . $e->getMessage() . "\n" . $e->getTraceAsString();
+			}
 		}
 
 		return $this->generateResponse($headers, $content);
