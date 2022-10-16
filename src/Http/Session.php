@@ -38,7 +38,6 @@ class Session extends \Nette\Http\Session
 	/** @deprecated */
 	protected bool $readAndClose = false;
 	protected bool $autoStart = true;
-	private SessionHandlerInterface|null $handler = null;
 	private bool $configured = false;
 
 	public function __construct(
@@ -109,9 +108,6 @@ class Session extends \Nette\Http\Session
 			}
 		}
 
-		if ($this->handler) {
-			session_set_save_handler($this->handler);
-		}
 		$this->configured = true;
 	}
 
@@ -279,10 +275,10 @@ class Session extends \Nette\Http\Session
 	 */
 	public function setHandler(\SessionHandlerInterface $handler): static
 	{
-		if ($this->configured) {
-			throw new Nette\InvalidStateException('Unable to set handler when session has been configured.');
+		if ($this->isStarted()) {
+			throw new Nette\InvalidStateException('Unable to set handler when session has been started.');
 		}
-		$this->handler = $handler;
+		session_set_save_handler($handler);
 		return $this;
 	}
 
