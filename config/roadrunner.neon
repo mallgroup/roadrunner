@@ -2,8 +2,6 @@ extensions:
 	roadrunner: Mallgroup\RoadRunner\DI\Extension
 
 roadrunner:
-	showExceptions: true
 	middlewares:
-	    - TracyMiddleware
-	    - SessionMiddleware
-	    - PsrApplication
+	    - Mallgroup\RoadRunner\Middlewares\TracyMiddleware(%debugMode%)
+	    - Mallgroup\RoadRunner\Middlewares\TryCatchMiddleware(%debugMode%)

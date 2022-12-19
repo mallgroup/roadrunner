@@ -120,14 +120,16 @@ class Extension extends Nette\DI\CompilerExtension
 	private function setupTagsEvents(ContainerBuilder $builder)
 	{
 		foreach (self::RR_FLUSHABLE_SERVICES as $service) {
-			$builder->getDefinition($service)->addTag(self::RR_FLUSH);
+			if ($builder->hasDefinition($service)) {
+				$builder->getDefinition($service)->addTag(self::RR_FLUSH);
+			}
 		}
 	}
 
 	protected function createEventsDefinition(ContainerBuilder $builder): ServiceDefinition
 	{
 		return $this->createServiceDefinition($builder, 'events')
-					->setFactory(Events::class);
+			->setFactory(Events::class);
 	}
 
 	protected function replaceNetteHttpStuff(ContainerBuilder $builder)
@@ -149,25 +151,25 @@ class Extension extends Nette\DI\CompilerExtension
 	protected function createPsrStuff(ContainerBuilder $builder)
 	{
 		$this->createServiceDefinition($builder, 'worker')
-			 ->setFactory('Spiral\RoadRunner\Worker::create')
-			 ->setType(WorkerInterface::class)
-			 ->setAutowired(false);
+			->setFactory('Spiral\RoadRunner\Worker::create')
+			->setType(WorkerInterface::class)
+			->setAutowired(false);
 
 		$this->createServiceDefinition($builder, 'psr17factory')
-			 ->setFactory(Psr17Factory::class)
-			 ->setAutowired(false);
+			->setFactory(Psr17Factory::class)
+			->setAutowired(false);
 
 		$this->createServiceDefinition($builder, 'psrWorker')
-			 ->setFactory(
-				 PSR7Worker::class,
-				 [
-					 '@' . $this->prefix('worker'),
-					 '@' . $this->prefix('psr17factory'),
-					 '@' . $this->prefix('psr17factory'),
-					 '@' . $this->prefix('psr17factory'),
-				 ]
-			 )
-			 ->setAutowired(false);
+			->setFactory(
+				PSR7Worker::class,
+				[
+					'@' . $this->prefix('worker'),
+					'@' . $this->prefix('psr17factory'),
+					'@' . $this->prefix('psr17factory'),
+					'@' . $this->prefix('psr17factory'),
+				]
+			)
+			->setAutowired(false);
 	}
 
 	private function createServiceDefinition(ContainerBuilder $builder, string $name): ServiceDefinition
@@ -178,11 +180,11 @@ class Extension extends Nette\DI\CompilerExtension
 	protected function createApplication(ContainerBuilder $builder)
 	{
 		$this->createServiceDefinition($builder, 'application')
-			 ->setFactory(NetteApplicationMiddleware::class)
-			 ->addSetup('$catchExceptions', [$this->config->catchExceptions])
-			 ->addSetup('$errorPresenter', [$this->config->errorPresenter])
+			->setFactory(NetteApplicationMiddleware::class)
+			->addSetup('$catchExceptions', [$this->config->catchExceptions])
+			->addSetup('$errorPresenter', [$this->config->errorPresenter])
 			->addSetup('$onResponse[] = ?', [
-				(string) (new Nette\PhpGenerator\Literal(
+				(string)(new Nette\PhpGenerator\Literal(
 					'function() { Nette\Http\Helpers::initCookie($this->getService(?), $this->getService(?));};',
 					[$this->prefix('response'), $this->prefix('request')]
 				))
@@ -192,23 +194,23 @@ class Extension extends Nette\DI\CompilerExtension
 	protected function createRoadRunner(ContainerBuilder $builder)
 	{
 		$this->createServiceDefinition($builder, 'roadrunner')
-			 ->setFactory(
-				 RoadRunner::class,
-				 [
-					 '@' . $this->prefix('psrWorker'),
-					 '@' . $this->prefix('chain'),
-					 '@' . $this->prefix('events'),
-				 ]
-			 );
+			->setFactory(
+				RoadRunner::class,
+				[
+					'@' . $this->prefix('psrWorker'),
+					'@' . $this->prefix('chain'),
+					'@' . $this->prefix('events'),
+				]
+			);
 	}
 
 	protected function createMiddlewareChain(ContainerBuilder $builder)
 	{
 		$this->createServiceDefinition($builder, 'chain')
-			 ->setFactory(PsrChain::class, [
-				 new Nette\PhpGenerator\Literal('new \Nyholm\Psr7\Response'),
-				 ...$this->config->middlewares,
-				 '@' . $this->prefix('application'),
-			 ]);
+			->setFactory(PsrChain::class, [
+				new Nette\PhpGenerator\Literal('new \Nyholm\Psr7\Response'),
+				...$this->config->middlewares,
+				'@' . $this->prefix('application'),
+			]);
 	}
 }
