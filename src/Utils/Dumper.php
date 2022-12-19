@@ -9,7 +9,8 @@ class Dumper extends \Tracy\Dumper
 {
 	private static bool $htmlMode = false;
 
-	public static function setHtmlMode(bool $value = false): void {
+	public static function setHtmlMode(bool $value = false): void
+	{
 		self::$htmlMode = $value;
 	}
 

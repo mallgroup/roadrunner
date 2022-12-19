@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Mallgroup\RoadRunner;
 
 use Nette\Http\IResponse;
-use Nyholm\Psr7\Response;
+use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Log\LoggerInterface;
 use Spiral\RoadRunner\Http\PSR7WorkerInterface;
@@ -17,6 +18,7 @@ class RoadRunner
 		private PSR7WorkerInterface $worker,
 		private PsrChain $chain,
 		private Events $events,
+		private ResponseFactoryInterface $responseFactory,
 		private ?LoggerInterface $logger = null,
 	) {
 	}
@@ -32,7 +34,7 @@ class RoadRunner
 					break; // termination request
 				}
 			} catch (Throwable) {
-				$this->worker->respond(new Response(400));
+				$this->worker->respond($this->responseFactory->createResponse(IResponse::S400_BadRequest));
 				continue;
 			}
 
@@ -61,7 +63,7 @@ class RoadRunner
 		$this->events->stop();
 	}
 
-	private function processException(Throwable $e): Response
+	private function processException(Throwable $e): ResponseInterface
 	{
 		try {
 			$this->logger?->error($e->getMessage(), [
@@ -73,10 +75,9 @@ class RoadRunner
 		} catch (\Throwable) {
 		}
 
-		return new Response(
-			IResponse::S500_INTERNAL_SERVER_ERROR,
-			['Content-Type' => 'text/json'],
-			'{"error":"Internal server error"}'
-		);
+		$resp = $this->responseFactory->createResponse(IResponse::S500_InternalServerError)
+			->withHeader('Content-Type', 'text/json');
+		$resp->getBody()->write('{"error":"Internal server error"}');
+		return $resp;
 	}
 }

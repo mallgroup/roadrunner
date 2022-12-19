@@ -19,9 +19,9 @@ use Nette\Application\Responses;
 use Nette\Application\UI;
 use Nette\Routing\Router;
 use Nette\Utils\Arrays;
-use Nyholm\Psr7\Stream;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Throwable;
@@ -67,6 +67,7 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 		private IRequest $httpRequest,
 		private IResponse $httpResponse,
 		private Events $events,
+		private StreamFactoryInterface $streamFactory,
 	) {
 		$this->events->addOnFlush(fn() => Arrays::invoke($this->onFlush, $this));
 	}
@@ -255,6 +256,6 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 		}
 
 		// add body
-		return $response->withBody(Stream::create($content));
+		return $response->withBody($this->streamFactory->createStream($content));
 	}
 }

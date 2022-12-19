@@ -1,6 +1,9 @@
 extensions:
 	roadrunner: Mallgroup\RoadRunner\DI\Extension
 
+services:
+	- GuzzleHttp\Psr7\HttpFactory
+
 roadrunner:
 	middlewares:
 	    - Mallgroup\RoadRunner\Middlewares\TracyMiddleware(%debugMode%)

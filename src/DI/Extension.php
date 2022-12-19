@@ -16,7 +16,10 @@ use Nette\DI\ContainerBuilder;
 use Nette\DI\Definitions\ServiceDefinition;
 use Nette\Schema\Expect;
 use Nette\Schema\Schema;
-use Nyholm\Psr7\Factory\Psr17Factory;
+use Psr\Http\Message\ResponseFactoryInterface;
+use Psr\Http\Message\ServerRequestFactoryInterface;
+use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Message\UploadedFileFactoryInterface;
 use Spiral\RoadRunner\Http\PSR7Worker;
 use Spiral\RoadRunner\WorkerInterface;
 use Tracy;
@@ -155,18 +158,14 @@ class Extension extends Nette\DI\CompilerExtension
 			->setType(WorkerInterface::class)
 			->setAutowired(false);
 
-		$this->createServiceDefinition($builder, 'psr17factory')
-			->setFactory(Psr17Factory::class)
-			->setAutowired(false);
-
 		$this->createServiceDefinition($builder, 'psrWorker')
 			->setFactory(
 				PSR7Worker::class,
 				[
 					'@' . $this->prefix('worker'),
-					'@' . $this->prefix('psr17factory'),
-					'@' . $this->prefix('psr17factory'),
-					'@' . $this->prefix('psr17factory'),
+					'@' . ServerRequestFactoryInterface::class,
+					'@' . StreamFactoryInterface::class,
+					'@' . UploadedFileFactoryInterface::class,
 				]
 			)
 			->setAutowired(false);
@@ -208,7 +207,7 @@ class Extension extends Nette\DI\CompilerExtension
 	{
 		$this->createServiceDefinition($builder, 'chain')
 			->setFactory(PsrChain::class, [
-				new Nette\PhpGenerator\Literal('new \Nyholm\Psr7\Response'),
+				'@' . ResponseFactoryInterface::class,
 				...$this->config->middlewares,
 				'@' . $this->prefix('application'),
 			]);

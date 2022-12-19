@@ -2,15 +2,11 @@
 
 namespace Mallgroup\RoadRunner\Middlewares;
 
-use JsonException;
 use Mallgroup\RoadRunner\Utils\Dumper;
-use Nette\Http\IResponse;
-use Nyholm\Psr7\Response;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
-use Tracy\BlueScreen;
 use function ob_get_clean;
 use function ob_start;
 

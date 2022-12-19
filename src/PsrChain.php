@@ -2,6 +2,7 @@
 
 namespace Mallgroup\RoadRunner;
 
+use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
@@ -9,10 +10,11 @@ use Psr\Http\Server\RequestHandlerInterface;
 
 final class PsrChain implements RequestHandlerInterface
 {
+
 	/** @var MiddlewareInterface[] */
 	private array $middlewares;
 
-	public function __construct(private ResponseInterface $response, MiddlewareInterface ...$middlewares)
+	public function __construct(private ResponseFactoryInterface $responseFactory, MiddlewareInterface ...$middlewares)
 	{
 		$this->middlewares = $middlewares;
 	}
@@ -20,7 +22,7 @@ final class PsrChain implements RequestHandlerInterface
 	private function withoutMiddleware(MiddlewareInterface $middleware): RequestHandlerInterface
 	{
 		return new self(
-			$this->response,
+			$this->responseFactory,
 			...array_filter(
 				$this->middlewares,
 				static function ($m) use ($middleware) {
@@ -39,6 +41,6 @@ final class PsrChain implements RequestHandlerInterface
 				$request,
 				$this->withoutMiddleware($middleware)
 			)
-			: $this->response;
+			: $this->responseFactory->createResponse();
 	}
 }

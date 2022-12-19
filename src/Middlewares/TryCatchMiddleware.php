@@ -4,7 +4,7 @@ namespace Mallgroup\RoadRunner\Middlewares;
 
 use JsonException;
 use Nette\Http\IResponse;
-use Nyholm\Psr7\Response;
+use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
@@ -15,6 +15,7 @@ class TryCatchMiddleware implements MiddlewareInterface
 {
 	public function __construct(
 		private bool $debugMode,
+		private ResponseFactoryInterface $responseFactory,
 		private ?BlueScreen $blueScreen = null,
 	) {
 	}
@@ -66,10 +67,13 @@ class TryCatchMiddleware implements MiddlewareInterface
 
 	private function generateResponse(array $headers, string $content): ResponseInterface
 	{
-		return new Response(
-			IResponse::S500_INTERNAL_SERVER_ERROR,
-			$headers,
-			$content,
-		);
+		$resp = $this->responseFactory->createResponse(IResponse::S500_InternalServerError);
+		$resp->getBody()->write($content);
+
+		foreach ($headers as $header => $value) {
+			$resp = $resp->withHeader($header, $value);
+		}
+
+		return $resp;
 	}
 }
