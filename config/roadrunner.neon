@@ -6,5 +6,4 @@ services:
 
 roadrunner:
 	middlewares:
-	    - Mallgroup\RoadRunner\Middlewares\TracyMiddleware(%debugMode%)
 	    - Mallgroup\RoadRunner\Middlewares\TryCatchMiddleware(%debugMode%)

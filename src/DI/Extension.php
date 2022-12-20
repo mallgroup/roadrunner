@@ -25,7 +25,7 @@ use Spiral\RoadRunner\WorkerInterface;
 use Tracy;
 
 /**
- * @property-read \stdClass $config
+ * @property object{errorPresenter:string, catchExceptions:bool, middlewares:list<mixed>}&\stdClass $config
  */
 class Extension extends Nette\DI\CompilerExtension
 {

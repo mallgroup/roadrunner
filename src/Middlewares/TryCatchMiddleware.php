@@ -10,6 +10,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Tracy\BlueScreen;
+use Tracy\Helpers;
 
 class TryCatchMiddleware implements MiddlewareInterface
 {
@@ -47,9 +48,10 @@ class TryCatchMiddleware implements MiddlewareInterface
 		$headers = ['Content-Type' => 'text/html'];
 		if ($request->getHeaderLine('X-Requested-With') !== 'XMLHttpRequest' && $this->blueScreen) {
 			$headers['Content-Type'] = 'text/html';
-			ob_start();
-			$this->blueScreen->render($e);
-			$content = ob_get_clean();
+
+			$content = Helpers::capture(function () use ($e) {
+				$this->blueScreen->render($e);
+			});
 		} else {
 			try {
 				$content = json_encode([
