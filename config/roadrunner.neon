@@ -13,3 +13,7 @@ roadrunner:
 #	    safety net middleware trying to prevent accidental application exception
 #       it will catch, log and respond with generic 500 message or a tracy bluescreen
 	    - Mallgroup\RoadRunner\Middlewares\TryCatchMiddleware(%debugMode%)
+#	    Nette http/sessions extension companion middleware
+#       this middleware will start, close and clean sessions between requests preventing leaks
+#       and it will write session cookie into the response
+	    - Mallgroup\RoadRunner\Middlewares\SessionMiddleware()
