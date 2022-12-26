@@ -9,6 +9,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Psr\Log\LoggerInterface;
 use Tracy\BlueScreen;
 use Tracy\Helpers;
 
@@ -18,6 +19,7 @@ class TryCatchMiddleware implements MiddlewareInterface
 		private bool $debugMode,
 		private ResponseFactoryInterface $responseFactory,
 		private ?BlueScreen $blueScreen = null,
+		private ?LoggerInterface $logger = null,
 	) {
 	}
 
@@ -28,6 +30,8 @@ class TryCatchMiddleware implements MiddlewareInterface
 		try {
 			return $handler->handle($request);
 		} catch (\Throwable $e) {
+			$this->logger?->critical('Uncaught Application Exception', ['exception' => $e]);
+
 			if ($this->debugMode) {
 				return $this->processExceptionError($e, $request);
 			}

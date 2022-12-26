@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Mallgroup\RoadRunner;
 
-use Nette\Http\IResponse;
-use Psr\Http\Message\ResponseFactoryInterface;
-use Psr\Http\Message\ResponseInterface;
+use Mallgroup\RoadRunner\Http\IRequest;
+use Mallgroup\RoadRunner\Http\IResponse;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 use Psr\Log\LoggerInterface;
 use Spiral\RoadRunner\Http\PSR7WorkerInterface;
 use Throwable;
@@ -16,9 +16,10 @@ class RoadRunner
 {
 	public function __construct(
 		private PSR7WorkerInterface $worker,
-		private PsrChain $chain,
+		private RequestHandlerInterface $handler,
 		private Events $events,
-		private ResponseFactoryInterface $responseFactory,
+		private IRequest $httpRequest,
+		private IResponse $httpResponse,
 		private ?LoggerInterface $logger = null,
 	) {
 	}
@@ -30,31 +31,22 @@ class RoadRunner
 		while (true) {
 			try {
 				$request = $this->worker->waitRequest();
-				if (!$request instanceof ServerRequestInterface) {
-					break; // termination request
+				if ($request === null) {
+					break; // graceful worker termination
 				}
-			} catch (Throwable) {
-				$this->worker->respond($this->responseFactory->createResponse(IResponse::S400_BadRequest));
-				continue;
+			} catch (Throwable $e) {
+				$this->logger?->critical('Unable to receive messages from RoadRunner.', ['exception' => $e]);
+				throw $e;
 			}
 
 			try {
-				ob_start();
-				$response = $this->chain->handle($request);
-				$content = ob_get_clean();
-				if ($content) {
-					$this->logger->warning(
-						'Unexpected output found on request, you are pushing to output instead of Response',
-						[
-							'length' => strlen($content),
-							'content' => substr($content, 0, 300) . (strlen($content) > 300 ? '... (shorted)' : ''),
-						],
-					);
-				}
+				$this->initialize($request);
 
+				$response = $this->handler->handle($request);
 				$this->worker->respond($response);
 			} catch (Throwable $e) {
-				$this->worker->respond($this->processException($e));
+				$this->logger?->critical('Uncaught Application Exception', ['exception' => $e]);
+				throw $e;
 			} finally {
 				$this->events->flush();
 			}
@@ -63,21 +55,9 @@ class RoadRunner
 		$this->events->stop();
 	}
 
-	private function processException(Throwable $e): ResponseInterface
+	private function initialize(ServerRequestInterface $request): void
 	{
-		try {
-			$this->logger?->error($e->getMessage(), [
-				'code' => $e->getCode(),
-				'file' => $e->getFile(),
-				'line' => $e->getLine(),
-				'trace' => $e->getTrace(),
-			]);
-		} catch (\Throwable) {
-		}
-
-		$resp = $this->responseFactory->createResponse(IResponse::S500_InternalServerError)
-			->withHeader('Content-Type', 'text/json');
-		$resp->getBody()->write('{"error":"Internal server error"}');
-		return $resp;
+		$this->httpResponse->cleanup();
+		$this->httpRequest->updateFromPsr($request);
 	}
 }

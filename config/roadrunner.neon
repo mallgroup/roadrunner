@@ -2,8 +2,14 @@ extensions:
 	roadrunner: Mallgroup\RoadRunner\DI\Extension
 
 services:
+#   register any Psr7 factory implementation
 	- GuzzleHttp\Psr7\HttpFactory
 
 roadrunner:
 	middlewares:
+#	    safety net middleware trying to prevent accidental stdout leak
+#       RoadRunner in pipe mode uses stdin/stdout for comunications
+	    - Mallgroup\RoadRunner\Middlewares\OutputBufferMiddleware()
+#	    safety net middleware trying to prevent accidental application exception
+#       it will catch, log and respond with generic 500 message or a tracy bluescreen
 	    - Mallgroup\RoadRunner\Middlewares\TryCatchMiddleware(%debugMode%)
