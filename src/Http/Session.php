@@ -198,18 +198,18 @@ class Session extends \Nette\Http\Session
 	 * Sets the amount of time (like '20 minutes') allowed between requests before the session will be terminated,
 	 * null means "for a maximum of 3 hours or until the browser is closed".
 	 */
-	public function setExpiration(?string $time): static
+	public function setExpiration(?string $expire): static
 	{
-		if ($time === null) {
+		if ($expire === null) {
 			return $this->setOptions([
 				'gc_maxlifetime' => self::DEFAULT_FILE_LIFETIME,
 				'cookie_lifetime' => 0,
 			]);
 		} else {
-			$time = (int) DateTime::from($time)->format('U') - time();
+			$expire = (int) DateTime::from($expire)->format('U') - time();
 			return $this->setOptions([
-				'gc_maxlifetime' => $time,
-				'cookie_lifetime' => $time,
+				'gc_maxlifetime' => $expire,
+				'cookie_lifetime' => $expire,
 			]);
 		}
 	}
