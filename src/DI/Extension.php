@@ -8,6 +8,7 @@ use Mallgroup\RoadRunner\Events;
 use Mallgroup\RoadRunner\Http\Request;
 use Mallgroup\RoadRunner\Http\RequestFactory;
 use Mallgroup\RoadRunner\Http\Response;
+use Mallgroup\RoadRunner\Middlewares\NetteInitializeMiddleware;
 use Mallgroup\RoadRunner\NetteApplicationHandler;
 use Mallgroup\RoadRunner\PsrChain;
 use Mallgroup\RoadRunner\RoadRunner;
@@ -206,15 +207,16 @@ class Extension extends Nette\DI\CompilerExtension
 
 	protected function createMiddlewareChain(ContainerBuilder $builder)
 	{
-		if (empty($this->config->middlewares)) {
-			$builder->addAlias($this->prefix('handler'), $this->prefix('application'));
-		} else {
-			$this->createServiceDefinition($builder, 'handler')
-				->setAutowired(false)
-				->setFactory(PsrChain::class, [
+		$this->createServiceDefinition($builder, 'initializeMiddleware')
+			->setAutowired(false)
+			->setFactory(NetteInitializeMiddleware::class);
+
+		$this->createServiceDefinition($builder, 'handler')
+			->setAutowired(false)
+			->setFactory(PsrChain::class, [
 				'@' . $this->prefix('application'),
+				'@' . $this->prefix('initializeMiddleware'),
 				...$this->config->middlewares,
 			]);
-		}
 	}
 }
