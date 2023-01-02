@@ -4,18 +4,22 @@ namespace Mallgroup\RoadRunner\Middlewares;
 
 use JsonException;
 use Nette\Http\IResponse;
-use Nyholm\Psr7\Response;
+use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use Psr\Log\LoggerInterface;
 use Tracy\BlueScreen;
+use Tracy\Helpers;
 
 class TryCatchMiddleware implements MiddlewareInterface
 {
 	public function __construct(
 		private bool $debugMode,
+		private ResponseFactoryInterface $responseFactory,
 		private ?BlueScreen $blueScreen = null,
+		private ?LoggerInterface $logger = null,
 	) {
 	}
 
@@ -26,6 +30,8 @@ class TryCatchMiddleware implements MiddlewareInterface
 		try {
 			return $handler->handle($request);
 		} catch (\Throwable $e) {
+			$this->logger?->critical('Uncaught Application Exception', ['exception' => $e]);
+
 			if ($this->debugMode) {
 				return $this->processExceptionError($e, $request);
 			}
@@ -46,9 +52,10 @@ class TryCatchMiddleware implements MiddlewareInterface
 		$headers = ['Content-Type' => 'text/html'];
 		if ($request->getHeaderLine('X-Requested-With') !== 'XMLHttpRequest' && $this->blueScreen) {
 			$headers['Content-Type'] = 'text/html';
-			ob_start();
-			$this->blueScreen->render($e);
-			$content = ob_get_clean();
+
+			$content = Helpers::capture(function () use ($e) {
+				$this->blueScreen->render($e);
+			});
 		} else {
 			try {
 				$content = json_encode([
@@ -66,10 +73,13 @@ class TryCatchMiddleware implements MiddlewareInterface
 
 	private function generateResponse(array $headers, string $content): ResponseInterface
 	{
-		return new Response(
-			IResponse::S500_INTERNAL_SERVER_ERROR,
-			$headers,
-			$content,
-		);
+		$resp = $this->responseFactory->createResponse(IResponse::S500_InternalServerError);
+		$resp->getBody()->write($content);
+
+		foreach ($headers as $header => $value) {
+			$resp = $resp->withHeader($header, $value);
+		}
+
+		return $resp;
 	}
 }

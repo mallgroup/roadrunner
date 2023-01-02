@@ -8,7 +8,8 @@ use Mallgroup\RoadRunner\Events;
 use Mallgroup\RoadRunner\Http\Request;
 use Mallgroup\RoadRunner\Http\RequestFactory;
 use Mallgroup\RoadRunner\Http\Response;
-use Mallgroup\RoadRunner\Middlewares\NetteApplicationMiddleware;
+use Mallgroup\RoadRunner\Middlewares\NetteInitializeMiddleware;
+use Mallgroup\RoadRunner\NetteApplicationHandler;
 use Mallgroup\RoadRunner\PsrChain;
 use Mallgroup\RoadRunner\RoadRunner;
 use Nette;
@@ -16,13 +17,16 @@ use Nette\DI\ContainerBuilder;
 use Nette\DI\Definitions\ServiceDefinition;
 use Nette\Schema\Expect;
 use Nette\Schema\Schema;
-use Nyholm\Psr7\Factory\Psr17Factory;
+use Psr\Http\Message\ServerRequestFactoryInterface;
+use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Message\UploadedFileFactoryInterface;
 use Spiral\RoadRunner\Http\PSR7Worker;
 use Spiral\RoadRunner\WorkerInterface;
 use Tracy;
 
 /**
- * @property-read \stdClass $config
+ * @property \stdClass $config
+ * @psalm-property object{errorPresenter:string, catchExceptions:bool, middlewares:list<mixed>}&\stdClass $config
  */
 class Extension extends Nette\DI\CompilerExtension
 {
@@ -100,7 +104,7 @@ class Extension extends Nette\DI\CompilerExtension
 		Tracy\BlueScreen $blueScreen,
 		Nette\Http\IRequest $httpRequest,
 		Nette\Http\IResponse $httpResponse,
-		NetteApplicationMiddleware $application,
+		NetteApplicationHandler $application,
 	): void {
 		$blueScreen->addPanel(
 			function (?\Throwable $e) use ($application, $blueScreen, $httpResponse, $httpRequest): ?array {
@@ -120,14 +124,16 @@ class Extension extends Nette\DI\CompilerExtension
 	private function setupTagsEvents(ContainerBuilder $builder)
 	{
 		foreach (self::RR_FLUSHABLE_SERVICES as $service) {
-			$builder->getDefinition($service)->addTag(self::RR_FLUSH);
+			if ($builder->hasDefinition($service)) {
+				$builder->getDefinition($service)->addTag(self::RR_FLUSH);
+			}
 		}
 	}
 
 	protected function createEventsDefinition(ContainerBuilder $builder): ServiceDefinition
 	{
 		return $this->createServiceDefinition($builder, 'events')
-					->setFactory(Events::class);
+			->setFactory(Events::class);
 	}
 
 	protected function replaceNetteHttpStuff(ContainerBuilder $builder)
@@ -149,25 +155,21 @@ class Extension extends Nette\DI\CompilerExtension
 	protected function createPsrStuff(ContainerBuilder $builder)
 	{
 		$this->createServiceDefinition($builder, 'worker')
-			 ->setFactory('Spiral\RoadRunner\Worker::create')
-			 ->setType(WorkerInterface::class)
-			 ->setAutowired(false);
-
-		$this->createServiceDefinition($builder, 'psr17factory')
-			 ->setFactory(Psr17Factory::class)
-			 ->setAutowired(false);
+			->setFactory('Spiral\RoadRunner\Worker::create')
+			->setType(WorkerInterface::class)
+			->setAutowired(false);
 
 		$this->createServiceDefinition($builder, 'psrWorker')
-			 ->setFactory(
-				 PSR7Worker::class,
-				 [
-					 '@' . $this->prefix('worker'),
-					 '@' . $this->prefix('psr17factory'),
-					 '@' . $this->prefix('psr17factory'),
-					 '@' . $this->prefix('psr17factory'),
-				 ]
-			 )
-			 ->setAutowired(false);
+			->setFactory(
+				PSR7Worker::class,
+				[
+					'@' . $this->prefix('worker'),
+					'@' . ServerRequestFactoryInterface::class,
+					'@' . StreamFactoryInterface::class,
+					'@' . UploadedFileFactoryInterface::class,
+				]
+			)
+			->setAutowired(false);
 	}
 
 	private function createServiceDefinition(ContainerBuilder $builder, string $name): ServiceDefinition
@@ -178,11 +180,12 @@ class Extension extends Nette\DI\CompilerExtension
 	protected function createApplication(ContainerBuilder $builder)
 	{
 		$this->createServiceDefinition($builder, 'application')
-			 ->setFactory(NetteApplicationMiddleware::class)
-			 ->addSetup('$catchExceptions', [$this->config->catchExceptions])
-			 ->addSetup('$errorPresenter', [$this->config->errorPresenter])
+			->setFactory(NetteApplicationHandler::class)
+			->setAutowired(NetteApplicationHandler::class)
+			->addSetup('$catchExceptions', [$this->config->catchExceptions])
+			->addSetup('$errorPresenter', [$this->config->errorPresenter])
 			->addSetup('$onResponse[] = ?', [
-				(string) (new Nette\PhpGenerator\Literal(
+				(string)(new Nette\PhpGenerator\Literal(
 					'function() { Nette\Http\Helpers::initCookie($this->getService(?), $this->getService(?));};',
 					[$this->prefix('response'), $this->prefix('request')]
 				))
@@ -192,23 +195,28 @@ class Extension extends Nette\DI\CompilerExtension
 	protected function createRoadRunner(ContainerBuilder $builder)
 	{
 		$this->createServiceDefinition($builder, 'roadrunner')
-			 ->setFactory(
-				 RoadRunner::class,
-				 [
-					 '@' . $this->prefix('psrWorker'),
-					 '@' . $this->prefix('chain'),
-					 '@' . $this->prefix('events'),
-				 ]
-			 );
+			->setFactory(
+				RoadRunner::class,
+				[
+					'@' . $this->prefix('psrWorker'),
+					'@' . $this->prefix('handler'),
+					'@' . $this->prefix('events'),
+				]
+			);
 	}
 
 	protected function createMiddlewareChain(ContainerBuilder $builder)
 	{
-		$this->createServiceDefinition($builder, 'chain')
-			 ->setFactory(PsrChain::class, [
-				 new Nette\PhpGenerator\Literal('new \Nyholm\Psr7\Response'),
-				 ...$this->config->middlewares,
-				 '@' . $this->prefix('application'),
-			 ]);
+		$this->createServiceDefinition($builder, 'initializeMiddleware')
+			->setAutowired(false)
+			->setFactory(NetteInitializeMiddleware::class);
+
+		$this->createServiceDefinition($builder, 'handler')
+			->setAutowired(false)
+			->setFactory(PsrChain::class, [
+				'@' . $this->prefix('application'),
+				'@' . $this->prefix('initializeMiddleware'),
+				...$this->config->middlewares,
+			]);
 	}
 }

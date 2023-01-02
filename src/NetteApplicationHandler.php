@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Mallgroup\RoadRunner\Middlewares;
+namespace Mallgroup\RoadRunner;
 
-use Mallgroup\RoadRunner\Events;
 use Mallgroup\RoadRunner\Http\IRequest;
 use Mallgroup\RoadRunner\Http\IResponse;
 use Nette;
@@ -19,14 +18,15 @@ use Nette\Application\Responses;
 use Nette\Application\UI;
 use Nette\Routing\Router;
 use Nette\Utils\Arrays;
-use Nyholm\Psr7\Stream;
+use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use Psr\Http\Server\MiddlewareInterface;
+use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Throwable;
+use function count;
 
-class NetteApplicationMiddleware implements MiddlewareInterface
+class NetteApplicationHandler implements RequestHandlerInterface
 {
 	use Nette\SmartObject;
 
@@ -67,6 +67,8 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 		private IRequest $httpRequest,
 		private IResponse $httpResponse,
 		private Events $events,
+		private ResponseFactoryInterface $responseFactory,
+		private StreamFactoryInterface $streamFactory,
 	) {
 		$this->events->addOnFlush(fn() => Arrays::invoke($this->onFlush, $this));
 	}
@@ -77,12 +79,12 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 	 * @throws BadRequestException
 	 * @throws ApplicationException
 	 */
-	public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
+	public function handle(ServerRequestInterface $request): ResponseInterface
 	{
-		$response = $handler->handle($request);
+		$response = $this->responseFactory->createResponse();
 
 		try {
-			$this->initialize($request);
+			$this->initialize();
 			Arrays::invoke($this->onStartup, $this);
 			$content = $this->processRequest($this->createInitialRequest());
 			Arrays::invoke($this->onShutdown, $this);
@@ -107,11 +109,8 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 		}
 	}
 
-	protected function initialize(ServerRequestInterface $request): void
+	protected function initialize(): void
 	{
-		$this->httpResponse->cleanup();
-		$this->httpRequest->updateFromPsr($request);
-
 		$this->requests = [];
 		$this->presenter = null;
 	}
@@ -255,6 +254,6 @@ class NetteApplicationMiddleware implements MiddlewareInterface
 		}
 
 		// add body
-		return $response->withBody(Stream::create($content));
+		return $response->withBody($this->streamFactory->createStream($content));
 	}
 }

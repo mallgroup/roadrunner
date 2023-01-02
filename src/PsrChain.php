@@ -9,36 +9,21 @@ use Psr\Http\Server\RequestHandlerInterface;
 
 final class PsrChain implements RequestHandlerInterface
 {
-	/** @var MiddlewareInterface[] */
-	private array $middlewares;
 
-	public function __construct(private ResponseInterface $response, MiddlewareInterface ...$middlewares)
-	{
-		$this->middlewares = $middlewares;
-	}
+	private RequestHandlerInterface $next;
+	private ?MiddlewareInterface $current;
 
-	private function withoutMiddleware(MiddlewareInterface $middleware): RequestHandlerInterface
+	public function __construct(RequestHandlerInterface $final, MiddlewareInterface ...$middleware)
 	{
-		return new self(
-			$this->response,
-			...array_filter(
-				$this->middlewares,
-				static function ($m) use ($middleware) {
-					return $middleware !== $m;
-				}
-			)
-		);
+		if ($middleware === []) {
+			throw new \InvalidArgumentException('at least one middleware is required for the chain');
+		}
+		$this->current = array_shift($middleware);
+		$this->next = $middleware === [] ? $final : new self($final, ...$middleware);
 	}
 
 	public function handle(ServerRequestInterface $request): ResponseInterface
 	{
-		$middleware = $this->middlewares[0] ?? false;
-
-		return $middleware
-			? $middleware->process(
-				$request,
-				$this->withoutMiddleware($middleware)
-			)
-			: $this->response;
+		return $this->current->process($request, $this->next);
 	}
 }
