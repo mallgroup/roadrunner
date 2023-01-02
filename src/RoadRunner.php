@@ -9,6 +9,8 @@ use Spiral\RoadRunner\Http\PSR7WorkerInterface;
 
 class RoadRunner
 {
+	private bool $stop = false;
+
 	public function __construct(
 		private PSR7WorkerInterface $worker,
 		private RequestHandlerInterface $handler,
@@ -21,7 +23,7 @@ class RoadRunner
 		$this->events->start();
 
 		try {
-			while (true) {
+			while (!$this->stop) {
 				$request = $this->worker->waitRequest();
 				if ($request === null) {
 					break; // graceful worker termination
@@ -37,5 +39,10 @@ class RoadRunner
 		} finally {
 			$this->events->stop();
 		}
+	}
+
+	public function stop(): void
+	{
+		$this->stop = true;
 	}
 }
