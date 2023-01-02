@@ -18,24 +18,26 @@
 	],
 	"require": {
 		"php": ">=8 <8.3",
-		"nette/di": "^3.0.7",
-		"nette/utils": "^3.0",
 		"nette/application": "^3.0.7",
+		"nette/di": "^3.0.7",
 		"nette/http": "^3.0",
 		"nette/schema": "^1.2",
-		"spiral/roadrunner-http": "^2.0",
-		"nyholm/psr7": "^1.4"
+		"nette/utils": "^3.0",
+		"psr/http-server-middleware": "^1.0",
+		"spiral/roadrunner-http": "^2.0"
 	},
 	"require-dev": {
 		"nette/bootstrap": "^3.0",
-		"squizlabs/php_codesniffer": "^3.6",
+		"nette/tester": "^2.4",
 		"phpstan/phpstan-nette": "^1.0",
-		"vimeo/psalm": "^4.19",
+		"squizlabs/php_codesniffer": "^3.6",
 		"tracy/tracy": "^2.9",
-		"nette/tester": "^2.4"
+		"vimeo/psalm": "^5.3"
 	},
 	"suggest": {
-		"tracy/tracy": "To set tracyHook and get Tracy blueScreen on exceptions"
+		"tracy/tracy": "To set tracyHook and get Tracy blueScreen on exceptions",
+		"guzzlehttp/psr7": "A implementation of PSR-7",
+		"nyholm/psr7": "A implementation of PSR-7"
 	},
 	"scripts": {
 		"phpcs": "./vendor/bin/phpcs -p -n --standard=ruleset.xml",
@@ -58,6 +60,7 @@
 	"config": {
 		"allow-plugins": {
 			"composer/package-versions-deprecated": true
-		}
+		},
+		"sort-packages": true
 	}
 }

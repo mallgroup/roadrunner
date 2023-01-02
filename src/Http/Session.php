@@ -35,15 +35,13 @@ class Session extends \Nette\Http\Session
 		'gc_maxlifetime' => self::DEFAULT_FILE_LIFETIME, // 3 hours
 	];
 
-	/** @deprecated */
-	protected bool $readAndClose = false;
 	protected bool $autoStart = true;
 	private SessionHandlerInterface|null $handler = null;
 	private bool $configured = false;
 
 	public function __construct(
 		protected Request $request,
-		protected Response $response
+		protected Response $response,
 	) {
 		parent::__construct($this->request, $this->response);
 		$this->options['cookie_path'] = &$this->response->cookiePath;
@@ -120,6 +118,10 @@ class Session extends \Nette\Http\Session
 	 */
 	public function sendCookie(): void
 	{
+		if (!$this->getId()) {
+			return;
+		}
+
 		$cookie = session_get_cookie_params();
 		$this->response->setCookie(
 			$this->getName(),
@@ -164,6 +166,7 @@ class Session extends \Nette\Http\Session
 
 		$this->started = false;
 		$this->regenerated = false;
+		$this->configured = false;
 	}
 
 	/**
@@ -457,6 +460,7 @@ class Session extends \Nette\Http\Session
 			session_id(session_create_id() ?: null);
 		}
 		$this->regenerated = true;
+		$this->sendCookie();
 	}
 
 	/**

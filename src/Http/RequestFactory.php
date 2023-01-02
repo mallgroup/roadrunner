@@ -70,7 +70,7 @@ class RequestFactory
 		$usingTrustedProxy = $remoteAddr
 			&& !empty(array_filter(
 				$this->proxies,
-				fn (string $proxy): bool => Helpers::ipMatch($remoteAddr, $proxy)
+				static fn (string $proxy): bool => Helpers::ipMatch($remoteAddr, $proxy)
 			));
 
 		if ($usingTrustedProxy) {
@@ -93,7 +93,6 @@ class RequestFactory
 	): array {
 		$forwardParams = $request->getHeader('HTTP_FORWARDED');
 		$proxyParams = [];
-		/** @var array<int, string> $forwardParams */
 		foreach ($forwardParams as $forwardParam) {
 			[$key, $value] = explode('=', $forwardParam, 2) + [1 => ''];
 			$proxyParams[strtolower(trim($key))][] = trim($value, " \t\"");
@@ -157,7 +156,7 @@ class RequestFactory
 			$xForwardedForWithoutProxies = array_filter(
 				$request->getHeader('HTTP_X_FORWARDED_FOR'),
 				function (string $ip): bool {
-					return !array_filter($this->proxies, function (string $proxy) use ($ip): bool {
+					return !array_filter($this->proxies, static function (string $proxy) use ($ip): bool {
 						return filter_var(trim($ip), FILTER_VALIDATE_IP) !== false
 							&& Helpers::ipMatch(trim($ip), $proxy);
 					});

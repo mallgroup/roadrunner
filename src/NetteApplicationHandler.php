@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Mallgroup\RoadRunner;
 
-use Mallgroup\RoadRunner\Http\Session;
+use Mallgroup\RoadRunner\Http\IRequest;
+use Mallgroup\RoadRunner\Http\IResponse;
 use Nette;
 use Nette\Application\AbortException;
 use Nette\Application\ApplicationException;
@@ -15,17 +16,17 @@ use Nette\Application\IPresenterFactory;
 use Nette\Application\Request;
 use Nette\Application\Responses;
 use Nette\Application\UI;
-use Nette\Http\Helpers;
 use Nette\Routing\Router;
 use Nette\Utils\Arrays;
-use Mallgroup\RoadRunner\Http\IRequest;
-use Mallgroup\RoadRunner\Http\IResponse;
-use Nyholm\Psr7\Stream;
+use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 use Throwable;
+use function count;
 
-class PsrApplication
+class NetteApplicationHandler implements RequestHandlerInterface
 {
 	use Nette\SmartObject;
 
@@ -65,18 +66,11 @@ class PsrApplication
 		private Router $router,
 		private IRequest $httpRequest,
 		private IResponse $httpResponse,
-		private Session $session,
+		private Events $events,
+		private ResponseFactoryInterface $responseFactory,
+		private StreamFactoryInterface $streamFactory,
 	) {
-		$this->onResponse[] = function () {
-			if($this->session->isStarted()){
-				$this->session->sendCookie();
-			}
-			$this->session->close();
-
-			if (!$this->httpRequest->getCookie(Helpers::STRICT_COOKIE_NAME)) {
-				Helpers::initCookie($this->httpRequest, $this->httpResponse);
-			}
-		};
+		$this->events->addOnFlush(fn() => Arrays::invoke($this->onFlush, $this));
 	}
 
 	/**
@@ -85,10 +79,12 @@ class PsrApplication
 	 * @throws BadRequestException
 	 * @throws ApplicationException
 	 */
-	public function run(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+	public function handle(ServerRequestInterface $request): ResponseInterface
 	{
+		$response = $this->responseFactory->createResponse();
+
 		try {
-			$this->initialize($request);
+			$this->initialize();
 			Arrays::invoke($this->onStartup, $this);
 			$content = $this->processRequest($this->createInitialRequest());
 			Arrays::invoke($this->onShutdown, $this);
@@ -109,21 +105,12 @@ class PsrApplication
 			Arrays::invoke($this->onShutdown, $this, $e);
 			throw $e;
 		} finally {
-			$this->session->close();
 			$this->httpResponse->setSent(true);
 		}
 	}
 
-	public function afterResponse(): void
+	protected function initialize(): void
 	{
-		Arrays::invoke($this->onFlush, $this);
-	}
-
-	protected function initialize(ServerRequestInterface $request): void
-	{
-		$this->httpResponse->cleanup();
-		$this->httpRequest->updateFromPsr($request);
-
 		$this->requests = [];
 		$this->presenter = null;
 	}
@@ -138,9 +125,13 @@ class PsrApplication
 
 		if ($params === null) {
 			throw new BadRequestException('No route for HTTP request.');
-		} elseif (!is_string($presenter)) {
+		}
+
+		if (!is_string($presenter)) {
 			throw new Nette\InvalidStateException('Missing presenter in route definition.');
-		} elseif (Nette\Utils\Strings::startsWith($presenter, 'Nette:') && $presenter !== 'Nette:Micro') {
+		}
+
+		if (Nette\Utils\Strings::startsWith($presenter, 'Nette:') && $presenter !== 'Nette:Micro') {
 			throw new BadRequestException('Invalid request. Presenter is not achievable.');
 		}
 
@@ -194,7 +185,7 @@ class PsrApplication
 		Arrays::invoke($this->onResponse, $this, $response);
 		ob_start();
 		$response->send($this->httpRequest, $this->httpResponse);
-		return (string) ob_get_clean();
+		return (string)ob_get_clean();
 	}
 
 	/**
@@ -215,7 +206,7 @@ class PsrApplication
 				return $this->processRequest($this->presenter->getLastCreatedRequest());
 			}
 		} else {
-			return $this->processRequest(new Request((string) $this->errorPresenter, Request::FORWARD, $args));
+			return $this->processRequest(new Request((string)$this->errorPresenter, Request::FORWARD, $args));
 		}
 	}
 
@@ -263,6 +254,6 @@ class PsrApplication
 		}
 
 		// add body
-		return $response->withBody(Stream::create($content));
+		return $response->withBody($this->streamFactory->createStream($content));
 	}
 }
