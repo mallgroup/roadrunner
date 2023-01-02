@@ -49,6 +49,10 @@ class SessionMiddleware implements MiddlewareInterface
 	private function sendCookie(): void
 	{
 		$cookie = session_get_cookie_params();
+		/**
+		 * @phpstan-ignore-next-line
+		 * @psalm-suppress TooManyArguments
+		 */
 		$this->response->setCookie(
 			session_name(),
 			session_id(),
