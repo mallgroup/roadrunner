@@ -184,11 +184,11 @@ class Extension extends Nette\DI\CompilerExtension
 			->setAutowired(NetteApplicationHandler::class)
 			->addSetup('$catchExceptions', [$this->config->catchExceptions])
 			->addSetup('$errorPresenter', [$this->config->errorPresenter])
-			->addSetup('$onResponse[] = ?', [
-				(string)(new Nette\PhpGenerator\Literal(
-					'function() { Nette\Http\Helpers::initCookie($this->getService(?), $this->getService(?));};',
-					[$this->prefix('response'), $this->prefix('request')]
-				))
+			->addSetup('$onResponse[]', [
+				new Nette\PhpGenerator\Literal(
+					'function(): void { Nette\Http\Helpers::initCookie($this->getService(?), $this->getService(?));}',
+					[$this->prefix('request'), $this->prefix('response')]
+				)
 			]);
 	}
 
